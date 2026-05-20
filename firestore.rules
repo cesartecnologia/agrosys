@@ -1,0 +1,261 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profileExists() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return profileExists() ? profile().role : null;
+    }
+
+    function validRole(value) {
+      return value in ["admin", "operador", "financeiro"];
+    }
+
+    function validText(value, required, max) {
+      return required
+        ? value is string && value.size() > 0 && value.size() <= max
+        : value == null || (value is string && value.size() <= max);
+    }
+
+    function validOptionalText(value, max) {
+      return value == null || (value is string && value.size() <= max);
+    }
+
+    function validNonNegativeNumber(value) {
+      return value is number && value >= 0;
+    }
+
+    function validFuelType(value) {
+      return value in ["diesel", "diesel_s10", "gasolina", "etanol", "biodiesel", "outro"];
+    }
+
+    function validUserDoc() {
+      return request.resource.data.keys().hasOnly([
+        "nome",
+        "email",
+        "role",
+        "fazenda_id",
+        "createdAt",
+        "updatedAt"
+      ])
+      && validText(request.resource.data.nome, true, 180)
+      && validText(request.resource.data.email, true, 180)
+      && validRole(request.resource.data.role)
+      && validOptionalText(request.resource.data.fazenda_id, 180);
+    }
+
+    function validTankDoc() {
+      return request.resource.data.keys().hasOnly([
+        "nome",
+        "tipo_combustivel",
+        "capacidade_litros",
+        "saldo_atual_litros",
+        "localizacao",
+        "status",
+        "observacoes",
+        "createdAt",
+        "updatedAt"
+      ])
+      && validText(request.resource.data.nome, true, 180)
+      && validFuelType(request.resource.data.tipo_combustivel)
+      && validNonNegativeNumber(request.resource.data.capacidade_litros)
+      && validNonNegativeNumber(request.resource.data.saldo_atual_litros)
+      && request.resource.data.saldo_atual_litros <= request.resource.data.capacidade_litros
+      && request.resource.data.status in ["ativo", "inativo"]
+      && validOptionalText(request.resource.data.localizacao, 180)
+      && validOptionalText(request.resource.data.observacoes, 3000);
+    }
+
+    function validFuelOutDoc() {
+      return request.resource.data.keys().hasOnly([
+        "veiculo_id",
+        "origem_abastecimento",
+        "tanque_id",
+        "posto_id",
+        "tipo_combustivel",
+        "funcionario",
+        "data_abastecimento",
+        "litros",
+        "valor_litro",
+        "valor_total",
+        "odometro_horimetro",
+        "createdAt",
+        "updatedAt"
+      ])
+      && validText(request.resource.data.veiculo_id, true, 180)
+      && request.resource.data.origem_abastecimento in ["tanque", "posto"]
+      && validFuelType(request.resource.data.tipo_combustivel)
+      && validText(request.resource.data.funcionario, true, 180)
+      && validText(request.resource.data.data_abastecimento, true, 40)
+      && validNonNegativeNumber(request.resource.data.litros)
+      && request.resource.data.litros > 0
+      && (!(request.resource.data.odometro_horimetro is number) || request.resource.data.odometro_horimetro >= 0)
+      && (
+        (
+          request.resource.data.origem_abastecimento == "tanque"
+          && validText(request.resource.data.tanque_id, true, 180)
+          && request.resource.data.posto_id == null
+          && request.resource.data.valor_litro == null
+          && request.resource.data.valor_total == null
+        )
+        ||
+        (
+          request.resource.data.origem_abastecimento == "posto"
+          && request.resource.data.tanque_id == null
+          && validText(request.resource.data.posto_id, true, 180)
+          && validNonNegativeNumber(request.resource.data.valor_litro)
+          && request.resource.data.valor_litro > 0
+          && validNonNegativeNumber(request.resource.data.valor_total)
+          && request.resource.data.valor_total > 0
+        )
+      );
+    }
+
+    function validFuelInDoc() {
+      return request.resource.data.keys().hasOnly([
+        "tanque_id",
+        "data_reabastecimento",
+        "tipo_combustivel",
+        "litros",
+        "valor_litro",
+        "valor_total",
+        "fornecedor",
+        "documento",
+        "responsavel",
+        "observacoes",
+        "createdAt",
+        "updatedAt"
+      ])
+      && validText(request.resource.data.tanque_id, true, 180)
+      && validText(request.resource.data.data_reabastecimento, true, 40)
+      && validFuelType(request.resource.data.tipo_combustivel)
+      && validNonNegativeNumber(request.resource.data.litros)
+      && request.resource.data.litros > 0
+      && validNonNegativeNumber(request.resource.data.valor_litro)
+      && validNonNegativeNumber(request.resource.data.valor_total)
+      && validOptionalText(request.resource.data.fornecedor, 180)
+      && validOptionalText(request.resource.data.documento, 180)
+      && validOptionalText(request.resource.data.responsavel, 180)
+      && validOptionalText(request.resource.data.observacoes, 3000);
+    }
+
+    function validStationDoc() {
+      return request.resource.data.keys().hasOnly([
+        "nome",
+        "cnpj",
+        "telefone",
+        "cidade",
+        "endereco",
+        "status",
+        "observacoes",
+        "createdAt",
+        "updatedAt"
+      ])
+      && validText(request.resource.data.nome, true, 180)
+      && validOptionalText(request.resource.data.cnpj, 40)
+      && validOptionalText(request.resource.data.telefone, 40)
+      && validOptionalText(request.resource.data.cidade, 180)
+      && validOptionalText(request.resource.data.endereco, 3000)
+      && request.resource.data.status in ["ativo", "inativo"]
+      && validOptionalText(request.resource.data.observacoes, 3000);
+    }
+
+    function isAdmin() {
+      return role() == "admin";
+    }
+
+    function isOperator() {
+      return role() == "operador";
+    }
+
+    function isFinanceiro() {
+      return role() == "financeiro";
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (isAdmin() || request.auth.uid == uid);
+      allow create, update: if isAdmin() && validUserDoc();
+      allow delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    match /empresas/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /funcionarios/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /veiculos/{id} {
+      allow read, write: if isAdmin() || isOperator();
+    }
+
+    match /manutencoes/{id} {
+      allow read, write: if isAdmin() || isOperator();
+    }
+
+    match /combustivel/{id} {
+      allow read: if isAdmin() || isOperator();
+      allow create, update: if (isAdmin() || isOperator()) && validFuelOutDoc();
+      allow delete: if isAdmin() || isOperator();
+    }
+
+    match /tanques_combustivel/{id} {
+      allow read: if isAdmin() || isOperator();
+      allow create, update: if (isAdmin() || isOperator()) && validTankDoc();
+      allow delete: if isAdmin();
+    }
+
+    match /reabastecimentos_tanque/{id} {
+      allow read: if isAdmin() || isOperator();
+      allow create, update: if (isAdmin() || isOperator()) && validFuelInDoc();
+      allow delete: if isAdmin() || isOperator();
+    }
+
+    match /postos_combustiveis/{id} {
+      allow read: if isAdmin() || isOperator();
+      allow create, update: if (isAdmin() || isOperator()) && validStationDoc();
+      allow delete: if isAdmin();
+    }
+
+    match /colheitas/{id} {
+      allow read, write: if isAdmin() || isOperator();
+    }
+
+    match /adubacoes/{id} {
+      allow read, write: if isAdmin() || isOperator();
+    }
+
+    match /movimentacoes_financeiras/{id} {
+      allow read, write: if isAdmin() || isFinanceiro();
+    }
+
+    match /cheques/{id} {
+      allow read, write: if isAdmin() || isFinanceiro();
+    }
+
+    match /fornecedores/{id} {
+      allow read, write: if isAdmin() || isFinanceiro();
+    }
+
+    match /produtos/{id} {
+      allow read, write: if isAdmin() || isFinanceiro();
+    }
+
+    match /nfes_importadas/{id} {
+      allow read, write: if isAdmin() || isFinanceiro();
+    }
+  }
+}
