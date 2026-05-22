@@ -77,6 +77,19 @@ service cloud.firestore {
       && validOptionalText(request.resource.data.observacoes, 3000);
     }
 
+    function validTankBalanceAdjustment() {
+      return resource != null
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "saldo_atual_litros",
+        "updatedAt"
+      ])
+      && validNonNegativeNumber(request.resource.data.saldo_atual_litros)
+      && (
+        !(request.resource.data.capacidade_litros is number)
+        || request.resource.data.saldo_atual_litros <= request.resource.data.capacidade_litros
+      );
+    }
+
     function validFuelOutDoc() {
       return request.resource.data.keys().hasOnly([
         "veiculo_id",
@@ -215,7 +228,8 @@ service cloud.firestore {
 
     match /tanques_combustivel/{id} {
       allow read: if isAdmin() || isOperator();
-      allow create, update: if (isAdmin() || isOperator()) && validTankDoc();
+      allow create: if (isAdmin() || isOperator()) && validTankDoc();
+      allow update: if (isAdmin() || isOperator()) && (validTankDoc() || validTankBalanceAdjustment());
       allow delete: if isAdmin();
     }
 
