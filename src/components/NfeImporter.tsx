@@ -3,6 +3,7 @@
 import { FileUp, Save } from "lucide-react";
 import { useState } from "react";
 import { parseNfeXml, persistNfeImport } from "@/lib/nfe";
+import { notify } from "@/lib/notify";
 import { toCurrency } from "@/lib/format";
 import type { NfeImportResult } from "@/types/domain";
 
@@ -35,8 +36,11 @@ export function NfeImporter() {
     try {
       const nfeId = await persistNfeImport(result);
       setMessage(`NFe importada com sucesso. ID: ${nfeId}`);
+      notify({ message: "NFe importada e lançamentos salvos.", tone: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível persistir a NFe.");
+      const nextMessage = error instanceof Error ? error.message : "Não foi possível persistir a NFe.";
+      setMessage(nextMessage);
+      notify({ message: nextMessage, tone: "error" });
     } finally {
       setBusy(false);
     }

@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  AlertCircle,
   Banknote,
   BarChart3,
   Building2,
   Car,
   ChevronDown,
+  CheckCircle2,
   LayoutDashboard,
   FileText,
   Leaf,
@@ -23,7 +25,12 @@ import { Reports } from "@/components/Reports";
 import { listRecords } from "@/lib/firestore-service";
 import { canAccess, getDefaultModuleForRole } from "@/lib/rbac";
 import { moduleGroups, modules } from "@/lib/modules";
+import type { NotifyPayload, NotifyTone } from "@/lib/notify";
 import type { ModuleKey } from "@/types/domain";
+
+type Toast = Required<NotifyPayload> & {
+  id: number;
+};
 
 const fuelModuleKeys = new Set<ModuleKey>([
   "combustivel",
@@ -51,6 +58,7 @@ export function AppShell() {
   const [activeKey, setActiveKey] = useState<ModuleKey | "nfe" | "dashboard" | "reports">("dashboard");
   const [expandedGroup, setExpandedGroup] = useState<(typeof moduleGroups)[number] | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const allowedModules = useMemo(() => {
     if (!profile) return [];
@@ -84,6 +92,23 @@ export function AppShell() {
       window.removeEventListener("empresa-updated", handleCompanyUpdate);
     };
   }, [profile]);
+
+  useEffect(() => {
+    function handleNotify(event: Event) {
+      const detail = (event as CustomEvent<NotifyPayload>).detail;
+      if (!detail?.message) return;
+
+      const id = Date.now() + Math.random();
+      const tone: NotifyTone = detail.tone ?? "info";
+      setToasts((current) => [...current.slice(-2), { id, message: detail.message, tone }]);
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((toast) => toast.id !== id));
+      }, 3600);
+    }
+
+    window.addEventListener("agrosys-notify", handleNotify);
+    return () => window.removeEventListener("agrosys-notify", handleNotify);
+  }, []);
 
   if (loading) return <main className="center-state">Carregando...</main>;
   if (!user || !profile) return <LoginScreen />;
@@ -160,7 +185,7 @@ export function AppShell() {
                   aria-label={group === "Empresa" ? "Área da empresa" : group}
                 >
                   <Icon size={16} />
-                  {group === "Empresa" ? <span aria-hidden="true" /> : group}
+                  {group}
                   <ChevronDown className="nav-chevron" size={15} />
                 </button>
                 {isExpanded ? (
@@ -226,6 +251,20 @@ export function AppShell() {
           />
         ) : null}
       </main>
+
+      {toasts.length ? (
+        <div className="toast-stack" aria-live="polite" aria-label="Notificações">
+          {toasts.map((toast) => {
+            const Icon = toast.tone === "error" ? AlertCircle : CheckCircle2;
+            return (
+              <div className={`app-toast ${toast.tone}`} key={toast.id}>
+                <Icon size={18} />
+                <span>{toast.message}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

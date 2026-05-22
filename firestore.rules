@@ -195,7 +195,8 @@ service cloud.firestore {
     }
 
     match /funcionarios/{id} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /veiculos/{id} {

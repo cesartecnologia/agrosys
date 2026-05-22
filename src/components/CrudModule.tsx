@@ -32,6 +32,7 @@ import {
   type TankBalanceDelta
 } from "@/lib/firestore-service";
 import { formatChoiceLabel, formatPhoneValue, formatValue, normalizeSearch } from "@/lib/format";
+import { notify } from "@/lib/notify";
 import type { AppRecord, ModuleConfig, ModuleKey } from "@/types/domain";
 import { RecordForm } from "@/components/RecordForm";
 import { useAuth } from "@/components/AuthProvider";
@@ -246,17 +247,53 @@ function getTankBalanceDeltas(moduleKey: string, next: AppRecord | null, previou
   return deltas;
 }
 
+function normalizeTankDeltas(deltas: TankBalanceDelta[], tankIdAliases: Record<string, string>) {
+  const normalized = new Map<string, number>();
+
+  for (const delta of deltas) {
+    const tankId = String(tankIdAliases[delta.tankId] ?? delta.tankId).trim();
+    if (!tankId) continue;
+    normalized.set(tankId, (normalized.get(tankId) ?? 0) + delta.deltaLiters);
+  }
+
+  return Array.from(normalized.entries())
+    .map(([tankId, deltaLiters]) => ({ tankId, deltaLiters }))
+    .filter((delta) => delta.deltaLiters !== 0);
+}
+
+function clampTankDeltas(
+  deltas: TankBalanceDelta[],
+  tankBalances: Record<string, { capacidade: number; saldo: number }>
+) {
+  return deltas
+    .map((delta) => {
+      const balance = tankBalances[delta.tankId];
+      if (!balance) return delta;
+
+      if (delta.deltaLiters > 0) {
+        return { ...delta, deltaLiters: Math.min(delta.deltaLiters, Math.max(balance.capacidade - balance.saldo, 0)) };
+      }
+
+      return { ...delta, deltaLiters: Math.max(delta.deltaLiters, -balance.saldo) };
+    })
+    .filter((delta) => delta.deltaLiters !== 0);
+}
+
 export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] }: Props) {
   const { createUser } = useAuth();
   const [records, setRecords] = useState<AppRecord[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<AppRecord | null>(null);
   const [viewing, setViewing] = useState<AppRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AppRecord | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [vehicleLabels, setVehicleLabels] = useState<Record<string, string>>({});
   const [tankLabels, setTankLabels] = useState<Record<string, string>>({});
+  const [tankIdAliases, setTankIdAliases] = useState<Record<string, string>>({});
+  const [tankBalances, setTankBalances] = useState<Record<string, { capacidade: number; saldo: number }>>({});
   const [tankFuelTypes, setTankFuelTypes] = useState<Record<string, string>>({});
   const [stationLabels, setStationLabels] = useState<Record<string, string>>({});
   const hasVehicleReferences = useMemo(
@@ -341,6 +378,8 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       try {
         const tanks = await listRecords("tanques_combustivel", 300);
         const labels: Record<string, string> = {};
+        const idAliases: Record<string, string> = {};
+        const balances: Record<string, { capacidade: number; saldo: number }> = {};
         const fuelTypes: Record<string, string> = {};
 
         for (const tank of tanks) {
@@ -348,23 +387,33 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
           const id = String(tank.id ?? "").trim();
           const name = String(tank.nome ?? "").trim();
           const fuelType = String(tank.tipo_combustivel ?? "").trim();
+          const capacidade = numericValue(tank.capacidade_litros);
+          const saldo = numericValue(tank.saldo_atual_litros);
           if (id) {
             labels[id] = display;
+            idAliases[id] = id;
+            balances[id] = { capacidade, saldo };
             if (fuelType) fuelTypes[id] = fuelType;
           }
           if (name) {
             labels[name] = display;
+            if (id) idAliases[name] = id;
             if (fuelType) fuelTypes[name] = fuelType;
           }
+          if (display && id) idAliases[display] = id;
         }
 
         if (active) {
           setTankLabels(labels);
+          setTankIdAliases(idAliases);
+          setTankBalances(balances);
           setTankFuelTypes(fuelTypes);
         }
       } catch {
         if (active) {
           setTankLabels({});
+          setTankIdAliases({});
+          setTankBalances({});
           setTankFuelTypes({});
         }
       }
@@ -478,11 +527,11 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
           : fuelStationPayload;
 
       if (editing?.id) {
-        const tankDeltas = getTankBalanceDeltas(module.key, nextPayload, editing);
+        const tankDeltas = normalizeTankDeltas(getTankBalanceDeltas(module.key, nextPayload, editing), tankIdAliases);
         if (tankDeltas.length) await updateRecordWithTankDeltas(module.collection, editing.id, nextPayload, tankDeltas);
         else await updateRecord(module.collection, editing.id, nextPayload);
       } else {
-        const tankDeltas = getTankBalanceDeltas(module.key, nextPayload);
+        const tankDeltas = normalizeTankDeltas(getTankBalanceDeltas(module.key, nextPayload), tankIdAliases);
         if (tankDeltas.length) await createRecordWithTankDeltas(module.collection, nextPayload, tankDeltas, forcedId);
         else await createRecord(module.collection, nextPayload, forcedId);
       }
@@ -492,18 +541,31 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
     setIsCreating(false);
     if (module.collection === "empresas") window.dispatchEvent(new Event("empresa-updated"));
     await refresh(true);
+    notify({ message: editing?.id ? "Registro atualizado." : "Registro salvo.", tone: "success" });
   }
 
-  async function handleRemove(record: AppRecord) {
-    if (!module.collection || !record.id) return;
-    const confirmed = window.confirm("Remover este registro?");
-    if (!confirmed) return;
-    const tankDeltas = getTankBalanceDeltas(module.key, null, record);
-    if (tankDeltas.length) await removeRecordWithTankDeltas(module.collection, record.id, tankDeltas);
-    else await removeRecord(module.collection, record.id);
-    setViewing(null);
-    if (module.collection === "empresas") window.dispatchEvent(new Event("empresa-updated"));
-    await refresh(true);
+  async function confirmRemove() {
+    const record = pendingDelete;
+    if (!module.collection || !record?.id) return;
+    setActionError("");
+
+    try {
+      const tankDeltas = clampTankDeltas(
+        normalizeTankDeltas(getTankBalanceDeltas(module.key, null, record), tankIdAliases),
+        tankBalances
+      );
+      if (tankDeltas.length) await removeRecordWithTankDeltas(module.collection, record.id, tankDeltas);
+      else await removeRecord(module.collection, record.id);
+      setPendingDelete(null);
+      setViewing(null);
+      if (module.collection === "empresas") window.dispatchEvent(new Event("empresa-updated"));
+      await refresh(true);
+      notify({ message: "Registro excluído.", tone: "success" });
+    } catch (removeError) {
+      const message = removeError instanceof Error ? removeError.message : "Não foi possível remover este registro.";
+      setActionError(message);
+      notify({ message, tone: "error" });
+    }
   }
 
   const showForm = isCreating || editing;
@@ -520,21 +582,28 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
   }
 
   function closeDetail() {
+    setActionError("");
+    setPendingDelete(null);
     setViewing(null);
   }
 
+  function closeDeleteConfirmation() {
+    setPendingDelete(null);
+  }
+
   useEffect(() => {
-    if (!showForm && !viewing) return;
+    if (!showForm && !viewing && !pendingDelete) return;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (showForm) closeForm();
+      if (pendingDelete) closeDeleteConfirmation();
+      else if (showForm) closeForm();
       else closeDetail();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showForm, viewing]);
+  }, [pendingDelete, showForm, viewing]);
 
   return (
     <section className="module-content">
@@ -598,6 +667,8 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
               ))}
             </div>
 
+            {actionError ? <div className="alert">{actionError}</div> : null}
+
             <div className="detail-actions">
               <button
                 type="button"
@@ -610,9 +681,41 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
                 <Edit3 size={16} />
                 Editar
               </button>
-              <button type="button" className="ghost-button danger" onClick={() => handleRemove(viewing)}>
+              <button type="button" className="ghost-button danger" onClick={() => setPendingDelete(viewing)}>
                 <Trash2 size={16} />
                 Remover
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {pendingDelete ? (
+        <div
+          className="modal-backdrop confirm-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeDeleteConfirmation();
+          }}
+        >
+          <section className="modal-panel confirm-panel" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <header className="modal-header">
+              <div>
+                <h3 id="delete-confirm-title">Confirmar exclusão</h3>
+                <span>{recordTitle(pendingDelete, module, displayValue)}</span>
+              </div>
+              <button type="button" className="icon-button" onClick={closeDeleteConfirmation} title="Fechar">
+                <X size={18} />
+              </button>
+            </header>
+            <p>Este registro será removido do sistema.</p>
+            <div className="detail-actions">
+              <button type="button" className="ghost-button" onClick={closeDeleteConfirmation}>
+                Cancelar
+              </button>
+              <button type="button" className="ghost-button danger" onClick={confirmRemove}>
+                <Trash2 size={16} />
+                Excluir
               </button>
             </div>
           </section>

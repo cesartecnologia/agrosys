@@ -227,8 +227,8 @@ export const modules: ModuleConfig[] = [
   {
     key: "movimentacoes_financeiras",
     collection: "movimentacoes_financeiras",
-    title: "Contas e movimentações",
-    description: "Contas a pagar/receber, fluxo de caixa e lançamentos gerais.",
+    title: "Entrada e saída",
+    description: "Entradas, saídas, fluxo de caixa e lançamentos gerais.",
     group: "Financeiro",
     allowedRoles: ["admin", "financeiro"],
     searchFields: ["descricao", "categoria", "status", "tipo"],
@@ -239,7 +239,6 @@ export const modules: ModuleConfig[] = [
       { name: "tipo", label: "Tipo", type: "select", required: true, options: ["entrada", "saida"] },
       { name: "data_lancamento", label: "Data de lançamento", type: "date", required: true },
       { name: "data_vencimento_recebimento", label: "Vencimento/Recebimento", type: "date" },
-      { name: "data_efetivacao", label: "Data de efetivação", type: "date" },
       { name: "categoria", label: "Categoria", type: "select", options: ["insumos", "salarios", "vendas_cafe", "manutencao", "combustivel", "outros"] },
       { name: "status", label: "Status", type: "select", required: true, options: ["pendente", "pago", "recebido"] },
       { name: "referencia_nfe_id", label: "Referência NFe", type: "text" },
@@ -296,12 +295,12 @@ export const modules: ModuleConfig[] = [
       { name: "codigo", label: "Código", type: "text" },
       { name: "ncm", label: "NCM", type: "text" },
       { name: "unidade_medida", label: "Unidade", type: "text", required: true },
-      { name: "ultima_quantidade", label: "Última quantidade", type: "number" },
-      { name: "ultimo_valor_unitario", label: "Último valor unitário", type: "number" },
-      { name: "ultimo_valor_total", label: "Último valor total", type: "number" },
-      { name: "ultimo_fornecedor", label: "Último fornecedor", type: "text" },
-      { name: "ultima_nfe", label: "Última NFe", type: "text" },
-      { name: "ultima_compra_em", label: "Última compra", type: "date" },
+      { name: "ultima_quantidade", label: "Quantidade", type: "number" },
+      { name: "ultimo_valor_unitario", label: "Valor unitário", type: "number" },
+      { name: "ultimo_valor_total", label: "Valor total", type: "number" },
+      { name: "ultimo_fornecedor", label: "Fornecedor", type: "text" },
+      { name: "ultima_nfe", label: "NFe", type: "text" },
+      { name: "ultima_compra_em", label: "Data da compra", type: "date" },
       { name: "descricao", label: "Descrição", type: "textarea" }
     ]
   }
