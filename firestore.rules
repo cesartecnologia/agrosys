@@ -40,6 +40,10 @@ service cloud.firestore {
       return value in ["diesel", "diesel_s10", "gasolina", "etanol", "biodiesel", "outro"];
     }
 
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
     function validUserDoc() {
       return request.resource.data.keys().hasOnly([
         "nome",
@@ -55,8 +59,8 @@ service cloud.firestore {
       && validOptionalText(request.resource.data.fazenda_id, 180);
     }
 
-    function validTankDoc() {
-      return request.resource.data.keys().hasOnly([
+    function validTankKeys(keys) {
+      return keys.hasOnly([
         "nome",
         "tipo_combustivel",
         "capacidade_litros",
@@ -67,7 +71,11 @@ service cloud.firestore {
         "createdAt",
         "updatedAt"
       ])
-      && validText(request.resource.data.nome, true, 180)
+      ;
+    }
+
+    function validTankShape() {
+      return validText(request.resource.data.nome, true, 180)
       && validFuelType(request.resource.data.tipo_combustivel)
       && validNonNegativeNumber(request.resource.data.capacidade_litros)
       && validNonNegativeNumber(request.resource.data.saldo_atual_litros)
@@ -75,6 +83,43 @@ service cloud.firestore {
       && request.resource.data.status in ["ativo", "inativo"]
       && validOptionalText(request.resource.data.localizacao, 180)
       && validOptionalText(request.resource.data.observacoes, 3000);
+    }
+
+    function validTankDoc() {
+      return validTankKeys(request.resource.data.keys()) && validTankShape();
+    }
+
+    function validTankUpdate() {
+      return resource != null
+      && validTankKeys(changedKeys())
+      && (
+        !changedKeys().hasAny(["nome"])
+        || validText(request.resource.data.nome, true, 180)
+      )
+      && (
+        !changedKeys().hasAny(["tipo_combustivel"])
+        || validFuelType(request.resource.data.tipo_combustivel)
+      )
+      && (
+        !changedKeys().hasAny(["capacidade_litros", "saldo_atual_litros"])
+        || (
+          validNonNegativeNumber(request.resource.data.capacidade_litros)
+          && validNonNegativeNumber(request.resource.data.saldo_atual_litros)
+          && request.resource.data.saldo_atual_litros <= request.resource.data.capacidade_litros
+        )
+      )
+      && (
+        !changedKeys().hasAny(["status"])
+        || request.resource.data.status in ["ativo", "inativo"]
+      )
+      && (
+        !changedKeys().hasAny(["localizacao"])
+        || validOptionalText(request.resource.data.localizacao, 180)
+      )
+      && (
+        !changedKeys().hasAny(["observacoes"])
+        || validOptionalText(request.resource.data.observacoes, 3000)
+      );
     }
 
     function validTankBalanceAdjustment() {
@@ -90,8 +135,8 @@ service cloud.firestore {
       );
     }
 
-    function validFuelOutDoc() {
-      return request.resource.data.keys().hasOnly([
+    function validFuelOutKeys(keys) {
+      return keys.hasOnly([
         "veiculo_id",
         "origem_abastecimento",
         "tanque_id",
@@ -106,7 +151,11 @@ service cloud.firestore {
         "createdAt",
         "updatedAt"
       ])
-      && validText(request.resource.data.veiculo_id, true, 180)
+      ;
+    }
+
+    function validFuelOutShape() {
+      return validText(request.resource.data.veiculo_id, true, 180)
       && request.resource.data.origem_abastecimento in ["tanque", "posto"]
       && validFuelType(request.resource.data.tipo_combustivel)
       && validText(request.resource.data.funcionario, true, 180)
@@ -135,8 +184,16 @@ service cloud.firestore {
       );
     }
 
-    function validFuelInDoc() {
-      return request.resource.data.keys().hasOnly([
+    function validFuelOutDoc() {
+      return validFuelOutKeys(request.resource.data.keys()) && validFuelOutShape();
+    }
+
+    function validFuelOutUpdate() {
+      return resource != null && validFuelOutKeys(changedKeys()) && validFuelOutShape();
+    }
+
+    function validFuelInKeys(keys) {
+      return keys.hasOnly([
         "tanque_id",
         "data_reabastecimento",
         "tipo_combustivel",
@@ -150,7 +207,11 @@ service cloud.firestore {
         "createdAt",
         "updatedAt"
       ])
-      && validText(request.resource.data.tanque_id, true, 180)
+      ;
+    }
+
+    function validFuelInShape() {
+      return validText(request.resource.data.tanque_id, true, 180)
       && validText(request.resource.data.data_reabastecimento, true, 40)
       && validFuelType(request.resource.data.tipo_combustivel)
       && validNonNegativeNumber(request.resource.data.litros)
@@ -163,8 +224,16 @@ service cloud.firestore {
       && validOptionalText(request.resource.data.observacoes, 3000);
     }
 
-    function validStationDoc() {
-      return request.resource.data.keys().hasOnly([
+    function validFuelInDoc() {
+      return validFuelInKeys(request.resource.data.keys()) && validFuelInShape();
+    }
+
+    function validFuelInUpdate() {
+      return resource != null && validFuelInKeys(changedKeys()) && validFuelInShape();
+    }
+
+    function validStationKeys(keys) {
+      return keys.hasOnly([
         "nome",
         "cnpj",
         "telefone",
@@ -175,13 +244,25 @@ service cloud.firestore {
         "createdAt",
         "updatedAt"
       ])
-      && validText(request.resource.data.nome, true, 180)
+      ;
+    }
+
+    function validStationShape() {
+      return validText(request.resource.data.nome, true, 180)
       && validOptionalText(request.resource.data.cnpj, 40)
       && validOptionalText(request.resource.data.telefone, 40)
       && validOptionalText(request.resource.data.cidade, 180)
       && validOptionalText(request.resource.data.endereco, 3000)
       && request.resource.data.status in ["ativo", "inativo"]
       && validOptionalText(request.resource.data.observacoes, 3000);
+    }
+
+    function validStationDoc() {
+      return validStationKeys(request.resource.data.keys()) && validStationShape();
+    }
+
+    function validStationUpdate() {
+      return resource != null && validStationKeys(changedKeys()) && validStationShape();
     }
 
     function isAdmin() {
@@ -222,26 +303,29 @@ service cloud.firestore {
 
     match /combustivel/{id} {
       allow read: if isAdmin() || isOperator();
-      allow create, update: if (isAdmin() || isOperator()) && validFuelOutDoc();
+      allow create: if (isAdmin() || isOperator()) && validFuelOutDoc();
+      allow update: if (isAdmin() || isOperator()) && validFuelOutUpdate();
       allow delete: if isAdmin() || isOperator();
     }
 
     match /tanques_combustivel/{id} {
       allow read: if isAdmin() || isOperator();
       allow create: if (isAdmin() || isOperator()) && validTankDoc();
-      allow update: if (isAdmin() || isOperator()) && (validTankDoc() || validTankBalanceAdjustment());
+      allow update: if (isAdmin() || isOperator()) && (validTankUpdate() || validTankBalanceAdjustment());
       allow delete: if isAdmin();
     }
 
     match /reabastecimentos_tanque/{id} {
       allow read: if isAdmin() || isOperator();
-      allow create, update: if (isAdmin() || isOperator()) && validFuelInDoc();
+      allow create: if (isAdmin() || isOperator()) && validFuelInDoc();
+      allow update: if (isAdmin() || isOperator()) && validFuelInUpdate();
       allow delete: if isAdmin() || isOperator();
     }
 
     match /postos_combustiveis/{id} {
       allow read: if isAdmin() || isOperator();
-      allow create, update: if (isAdmin() || isOperator()) && validStationDoc();
+      allow create: if (isAdmin() || isOperator()) && validStationDoc();
+      allow update: if (isAdmin() || isOperator()) && validStationUpdate();
       allow delete: if isAdmin();
     }
 

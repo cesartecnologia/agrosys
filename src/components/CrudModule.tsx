@@ -513,13 +513,30 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       throw new Error("Informe uma senha temporária para criar o usuário.");
     } else {
       delete payload.password;
-      const isFuelStationFill = module.key === "combustivel" && payload.origem_abastecimento === "posto";
+      const fuelOrigin = String(payload.origem_abastecimento ?? "tanque").trim();
+      const isFuelStationFill = module.key === "combustivel" && fuelOrigin === "posto";
       const liters = numericValue(payload.litros);
       const literValue = numericValue(payload.valor_litro);
-      const fuelStationPayload =
-        isFuelStationFill && liters > 0 && literValue > 0
-          ? { ...payload, valor_total: Number((liters * literValue).toFixed(2)) }
-          : payload;
+      const fuelStationPayload = (() => {
+        if (module.key !== "combustivel") return payload;
+
+        if (isFuelStationFill) {
+          return {
+            ...payload,
+            origem_abastecimento: "posto",
+            tanque_id: null,
+            valor_total: liters > 0 && literValue > 0 ? Number((liters * literValue).toFixed(2)) : payload.valor_total
+          };
+        }
+
+        return {
+          ...payload,
+          origem_abastecimento: "tanque",
+          posto_id: null,
+          valor_litro: null,
+          valor_total: null
+        };
+      })();
       const tankFuelType = !isFuelStationFill ? tankFuelTypes[tankIdFrom(fuelStationPayload)] : "";
       const nextPayload =
         (module.key === "combustivel" || module.key === "reabastecimentos_tanque") && tankFuelType

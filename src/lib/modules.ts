@@ -139,7 +139,7 @@ export const modules: ModuleConfig[] = [
       { name: "capacidade_litros", label: "Capacidade (litros)", type: "number", required: true },
       { name: "saldo_atual_litros", label: "Saldo atual (litros)", type: "number", required: true },
       { name: "localizacao", label: "Localização", type: "text" },
-      { name: "status", label: "Status", type: "select", required: true, options: ["ativo", "inativo"] },
+      { name: "status", label: "Status", type: "select", required: true, defaultValue: "ativo", options: ["ativo", "inativo"] },
       { name: "observacoes", label: "Observações", type: "textarea" }
     ]
   },
