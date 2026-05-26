@@ -98,6 +98,13 @@ function isWithinPastDays(value: unknown, days: number) {
   return date >= start && date <= today;
 }
 
+function isCurrentMonth(value: unknown) {
+  const date = asDate(value);
+  if (!date) return false;
+  const today = new Date();
+  return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
+}
+
 function latestRecords(records: AppRecord[], dateField: string, limit = 5) {
   return [...records]
     .sort((left, right) => (asDate(right[dateField])?.getTime() ?? 0) - (asDate(left[dateField])?.getTime() ?? 0))
@@ -219,10 +226,9 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
     const tanques = data.tanques_combustivel ?? [];
     const veiculos = data.veiculos ?? [];
 
-    const entradas = financeiro.filter((item) => item.tipo === "entrada");
-    const saidas = financeiro.filter((item) => item.tipo === "saida");
-    const totalEntradas = entradas.reduce((total, item) => total + asNumber(item.valor), 0);
-    const totalSaidas = saidas.reduce((total, item) => total + asNumber(item.valor), 0);
+    const gastosPagosMes = financeiro
+      .filter((item) => item.tipo === "saida" && item.status === "pago" && isCurrentMonth(item.data_lancamento))
+      .reduce((total, item) => total + asNumber(item.valor), 0);
     const pendente = financeiro
       .filter((item) => item.status === "pendente")
       .reduce((total, item) => total + asNumber(item.valor), 0);
@@ -275,17 +281,15 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
         "Veículo"
       ),
       consumoSemanal,
-      entradas: totalEntradas,
+      gastosPagosMes,
       litrosCafe,
       manutencoesProximas,
       pendente,
       pendingRows,
       producaoPorFazenda: groupByNumber(colheitas, "fazenda", "quantidade_sacas", "Fazenda"),
-      saldo: totalEntradas - totalSaidas,
       saldoTanques,
       capacidadeTanques,
       sacas,
-      saidas: totalSaidas,
       ultimasColheitas: latestRecords(colheitas, "data_colheita", 4),
       vencidas: financeiro.filter(
         (item) => item.status === "pendente" && isOverdue(item.data_vencimento_recebimento)
@@ -312,12 +316,12 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
       value: `${summary.sacas.toLocaleString("pt-BR")} sc`
     },
     {
-      detail: `${toCurrency(summary.pendente)} pendente`,
+      detail: "Pagos no mês atual",
       icon: <Banknote size={18} />,
-      label: "Saldo",
+      label: "Gastos pagos",
       target: "movimentacoes_financeiras",
       tone: "mint",
-      value: toCurrency(summary.saldo)
+      value: toCurrency(summary.gastosPagosMes)
     },
     {
       detail: `${summary.consumoSemanal.toLocaleString("pt-BR")} L na semana`,

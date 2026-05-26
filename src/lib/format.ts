@@ -1,7 +1,20 @@
 import { Timestamp } from "firebase/firestore";
 
 export function formatChoiceLabel(value: unknown) {
-  const normalized = String(value ?? "").replace(/_/g, " ").trim();
+  const raw = String(value ?? "").trim();
+  const labels: Record<string, string> = {
+    combustivel: "Combustível",
+    despesas_indiretas: "Despesas indiretas",
+    despesas_publicas: "Despesas públicas",
+    escritorio: "Escritório",
+    insumos: "Insumos",
+    manutencao: "Manutenção",
+    materiais_construcao: "Materiais de construção",
+    outros: "Outros",
+    salarios: "Salários",
+    vendas_cafe: "Vendas de café"
+  };
+  const normalized = labels[raw] ?? raw.replace(/_/g, " ").trim();
   if (!normalized) return "-";
   return normalized.charAt(0).toLocaleUpperCase("pt-BR") + normalized.slice(1);
 }

@@ -73,7 +73,7 @@ export const modules: ModuleConfig[] = [
     listFields: ["placa", "tipo", "modelo", "marca", "status"],
     fields: [
       { name: "placa", label: "Placa ou identificador", type: "text", required: true },
-      { name: "tipo", label: "Tipo", type: "select", required: true, options: ["trator", "caminhão", "caminhonete", "colheitadeira", "carro", "pulverizador", "outro"] },
+      { name: "tipo", label: "Tipo", type: "select", required: true, options: ["trator", "caminhão", "caminhonete", "moto", "colheitadeira", "carro", "pulverizador", "outro"] },
       { name: "modelo", label: "Modelo", type: "text", required: true },
       { name: "ano", label: "Ano de fabricação", type: "number" },
       { name: "marca", label: "Marca", type: "text" },
@@ -239,7 +239,7 @@ export const modules: ModuleConfig[] = [
       { name: "tipo", label: "Tipo", type: "select", required: true, options: ["entrada", "saida"] },
       { name: "data_lancamento", label: "Data de lançamento", type: "date", required: true },
       { name: "data_vencimento_recebimento", label: "Vencimento/Recebimento", type: "date" },
-      { name: "categoria", label: "Categoria", type: "select", options: ["insumos", "salarios", "vendas_cafe", "manutencao", "combustivel", "outros"] },
+      { name: "categoria", label: "Categoria", type: "select", options: ["insumos", "salarios", "vendas_cafe", "manutencao", "combustivel", "materiais_construcao", "despesas_publicas", "despesas_indiretas", "escritorio", "outros"] },
       { name: "status", label: "Status", type: "select", required: true, options: ["pendente", "pago", "recebido"] },
       { name: "referencia_nfe_id", label: "Referência NFe", type: "text" },
       { name: "referencia_cheque_id", label: "Referência cheque", type: "text" }

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bike,
   BriefcaseBusiness,
   Car,
   Combine,
@@ -95,6 +96,7 @@ function vehicleIconFor(type: unknown): LucideIcon {
   const normalized = normalizedText(type);
   if (normalized.includes("trator")) return Tractor;
   if (normalized.includes("caminhao") || normalized.includes("caminhonete")) return Truck;
+  if (normalized.includes("moto")) return Bike;
   if (normalized.includes("colheitadeira")) return Combine;
   if (normalized.includes("carro") || normalized.includes("veiculo")) return Car;
   if (normalized.includes("pulverizador")) return SprayCan;
