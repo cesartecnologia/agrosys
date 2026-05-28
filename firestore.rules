@@ -157,7 +157,6 @@ service cloud.firestore {
     function validFuelOutShape() {
       return validText(request.resource.data.veiculo_id, true, 180)
       && request.resource.data.origem_abastecimento in ["tanque", "posto"]
-      && validFuelType(request.resource.data.tipo_combustivel)
       && validText(request.resource.data.funcionario, true, 180)
       && validText(request.resource.data.data_abastecimento, true, 40)
       && validNonNegativeNumber(request.resource.data.litros)
@@ -167,14 +166,32 @@ service cloud.firestore {
         (
           request.resource.data.origem_abastecimento == "tanque"
           && validText(request.resource.data.tanque_id, true, 180)
-          && request.resource.data.posto_id == null
-          && request.resource.data.valor_litro == null
-          && request.resource.data.valor_total == null
+          && (
+            !request.resource.data.keys().hasAny(["tipo_combustivel"])
+            || request.resource.data.tipo_combustivel == null
+            || validFuelType(request.resource.data.tipo_combustivel)
+          )
+          && (
+            !request.resource.data.keys().hasAny(["posto_id"])
+            || request.resource.data.posto_id == null
+          )
+          && (
+            !request.resource.data.keys().hasAny(["valor_litro"])
+            || request.resource.data.valor_litro == null
+          )
+          && (
+            !request.resource.data.keys().hasAny(["valor_total"])
+            || request.resource.data.valor_total == null
+          )
         )
         ||
         (
           request.resource.data.origem_abastecimento == "posto"
-          && request.resource.data.tanque_id == null
+          && validFuelType(request.resource.data.tipo_combustivel)
+          && (
+            !request.resource.data.keys().hasAny(["tanque_id"])
+            || request.resource.data.tanque_id == null
+          )
           && validText(request.resource.data.posto_id, true, 180)
           && validNonNegativeNumber(request.resource.data.valor_litro)
           && request.resource.data.valor_litro > 0

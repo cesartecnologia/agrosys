@@ -281,6 +281,25 @@ function clampTankDeltas(
     .filter((delta) => delta.deltaLiters !== 0);
 }
 
+function assertTankDeltas(
+  deltas: TankBalanceDelta[],
+  tankBalances: Record<string, { capacidade: number; saldo: number }>
+) {
+  for (const delta of deltas) {
+    const balance = tankBalances[delta.tankId];
+    if (!balance) continue;
+
+    const nextBalance = balance.saldo + delta.deltaLiters;
+    if (nextBalance < 0) {
+      throw new Error("Saldo insuficiente no tanque para registrar este abastecimento.");
+    }
+
+    if (balance.capacidade > 0 && nextBalance > balance.capacidade) {
+      throw new Error("O saldo do tanque não pode ultrapassar a capacidade cadastrada.");
+    }
+  }
+}
+
 export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] }: Props) {
   const { createUser } = useAuth();
   const [records, setRecords] = useState<AppRecord[]>([]);
@@ -542,7 +561,9 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
           valor_total: null
         };
       })();
-      const tankFuelType = !isFuelStationFill ? tankFuelTypes[tankIdFrom(fuelStationPayload)] : "";
+      const tankFuelType = !isFuelStationFill
+        ? String(tankFuelTypes[tankIdFrom(fuelStationPayload)] ?? fuelStationPayload.tipo_combustivel ?? "outro").trim()
+        : "";
       const nextPayload =
         (module.key === "combustivel" || module.key === "reabastecimentos_tanque") && tankFuelType
           ? { ...fuelStationPayload, tipo_combustivel: tankFuelType }
@@ -550,10 +571,12 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
 
       if (editing?.id) {
         const tankDeltas = normalizeTankDeltas(getTankBalanceDeltas(module.key, nextPayload, editing), tankIdAliases);
+        assertTankDeltas(tankDeltas, tankBalances);
         if (tankDeltas.length) await updateRecordWithTankDeltas(module.collection, editing.id, nextPayload, tankDeltas);
         else await updateRecord(module.collection, editing.id, nextPayload);
       } else {
         const tankDeltas = normalizeTankDeltas(getTankBalanceDeltas(module.key, nextPayload), tankIdAliases);
+        assertTankDeltas(tankDeltas, tankBalances);
         if (tankDeltas.length) await createRecordWithTankDeltas(module.collection, nextPayload, tankDeltas, forcedId);
         else await createRecord(module.collection, nextPayload, forcedId);
       }
