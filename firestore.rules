@@ -161,7 +161,11 @@ service cloud.firestore {
       && validText(request.resource.data.data_abastecimento, true, 40)
       && validNonNegativeNumber(request.resource.data.litros)
       && request.resource.data.litros > 0
-      && (!(request.resource.data.odometro_horimetro is number) || request.resource.data.odometro_horimetro >= 0)
+      && (
+        !request.resource.data.keys().hasAny(["odometro_horimetro"])
+        || request.resource.data.odometro_horimetro == null
+        || validNonNegativeNumber(request.resource.data.odometro_horimetro)
+      )
       && (
         (
           request.resource.data.origem_abastecimento == "tanque"
@@ -187,16 +191,26 @@ service cloud.firestore {
         ||
         (
           request.resource.data.origem_abastecimento == "posto"
-          && validFuelType(request.resource.data.tipo_combustivel)
+          && (
+            !request.resource.data.keys().hasAny(["tipo_combustivel"])
+            || request.resource.data.tipo_combustivel == null
+            || validFuelType(request.resource.data.tipo_combustivel)
+          )
           && (
             !request.resource.data.keys().hasAny(["tanque_id"])
             || request.resource.data.tanque_id == null
           )
           && validText(request.resource.data.posto_id, true, 180)
-          && validNonNegativeNumber(request.resource.data.valor_litro)
-          && request.resource.data.valor_litro > 0
-          && validNonNegativeNumber(request.resource.data.valor_total)
-          && request.resource.data.valor_total > 0
+          && (
+            !request.resource.data.keys().hasAny(["valor_litro"])
+            || request.resource.data.valor_litro == null
+            || validNonNegativeNumber(request.resource.data.valor_litro)
+          )
+          && (
+            !request.resource.data.keys().hasAny(["valor_total"])
+            || request.resource.data.valor_total == null
+            || validNonNegativeNumber(request.resource.data.valor_total)
+          )
         )
       );
     }
