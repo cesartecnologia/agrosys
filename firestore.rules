@@ -249,12 +249,30 @@ service cloud.firestore {
 
     function validStationShape() {
       return validText(request.resource.data.nome, true, 180)
-      && validOptionalText(request.resource.data.cnpj, 40)
-      && validOptionalText(request.resource.data.telefone, 40)
-      && validOptionalText(request.resource.data.cidade, 180)
-      && validOptionalText(request.resource.data.endereco, 3000)
-      && request.resource.data.status in ["ativo", "inativo"]
-      && validOptionalText(request.resource.data.observacoes, 3000);
+      && (
+        !request.resource.data.keys().hasAny(["cnpj"])
+        || validOptionalText(request.resource.data.cnpj, 40)
+      )
+      && (
+        !request.resource.data.keys().hasAny(["telefone"])
+        || validOptionalText(request.resource.data.telefone, 40)
+      )
+      && (
+        !request.resource.data.keys().hasAny(["cidade"])
+        || validOptionalText(request.resource.data.cidade, 180)
+      )
+      && (
+        !request.resource.data.keys().hasAny(["endereco"])
+        || validOptionalText(request.resource.data.endereco, 3000)
+      )
+      && (
+        !request.resource.data.keys().hasAny(["status"])
+        || request.resource.data.status in ["ativo", "inativo"]
+      )
+      && (
+        !request.resource.data.keys().hasAny(["observacoes"])
+        || validOptionalText(request.resource.data.observacoes, 3000)
+      );
     }
 
     function validStationDoc() {

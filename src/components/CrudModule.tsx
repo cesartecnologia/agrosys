@@ -515,6 +515,9 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       throw new Error("Informe uma senha temporária para criar o usuário.");
     } else {
       delete payload.password;
+      if ((module.key === "postos_combustiveis" || module.key === "tanques_combustivel") && !payload.status) {
+        payload.status = "ativo";
+      }
       const fuelOrigin = String(payload.origem_abastecimento ?? "tanque").trim();
       const isFuelStationFill = module.key === "combustivel" && fuelOrigin === "posto";
       const liters = numericValue(payload.litros);
