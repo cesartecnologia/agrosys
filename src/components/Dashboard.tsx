@@ -13,7 +13,7 @@ import {
   Tractor,
   Wrench
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { listRecords } from "@/lib/firestore-service";
 import { formatDateValue, formatValue, parseDateValue, toCurrency } from "@/lib/format";
@@ -30,6 +30,7 @@ type GroupSummary = { label: string; value: number };
 type PendingView = "recentes" | "todos";
 type PendingRow = {
   date: string;
+  id: string;
   name: string;
   sortDate: number;
   status: string;
@@ -211,7 +212,9 @@ function ProgressRow({ item, max, suffix = "" }: { item: GroupSummary; max: numb
 export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
   const [data, setData] = useState<DashboardData>({});
   const [loading, setLoading] = useState(true);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pendingView, setPendingView] = useState<PendingView>("recentes");
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -239,6 +242,27 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
     };
   }, [allowedModules]);
 
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!notificationsRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [notificationsOpen]);
+
   const summary = useMemo(() => {
     const adubacoes = data.adubacoes ?? [];
     const cheques = data.cheques ?? [];
@@ -258,7 +282,11 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
       )
       .reduce((total, item) => total + asNumber(item.valor), 0);
     const chequesCompensadosMes = cheques
-      .filter((item) => item.status === "compensado" && isCurrentMonth(item.data_vencimento))
+      .filter(
+        (item) =>
+          item.status === "compensado" &&
+          isCurrentMonth(item.data_compensacao || item.data_vencimento)
+      )
       .reduce((total, item) => total + asNumber(item.valor), 0);
     const gastosPagosMes = gastosFinanceirosPagosMes + chequesCompensadosMes;
     const pendente = financeiro
@@ -294,6 +322,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
         .filter((item) => item.status === "pendente")
         .map((item) => ({
           date: formatDateValue(item.data_vencimento_recebimento) || "-",
+          id: `financeiro-${String(item.id)}`,
           name: String(item.descricao || "Conta pendente"),
           sortDate: dateTimeValue(item.data_vencimento_recebimento),
           status: isOverdue(item.data_vencimento_recebimento) ? "Vencida" : "Pendente",
@@ -304,6 +333,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
         .filter((item) => item.status === "a_compensar")
         .map((item) => ({
           date: formatDateValue(item.data_vencimento) || "-",
+          id: `cheque-${String(item.id)}`,
           name: `Cheque ${String(item.numero || item.banco || "").trim()}`.trim(),
           sortDate: dateTimeValue(item.data_vencimento),
           status: "A compensar",
@@ -312,6 +342,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
         })),
       ...manutencoesProximas.map((item) => ({
         date: formatDateValue(item.proxima_manutencao) || "-",
+        id: `manutencao-${String(item.id)}`,
         name: String(item.oficina || item.descricao || "Manutenção"),
         sortDate: dateTimeValue(item.proxima_manutencao),
         status: "Próxima",
@@ -406,47 +437,57 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
 
   return (
     <section className="dashboard dashboard-reference">
-      <section className="dashboard-notifications" aria-label="Notificações financeiras">
-        <header>
-          <div className="dashboard-notification-heading">
-            <span>
-              <Bell size={19} />
-            </span>
-            <div>
-              <h2>Notificações</h2>
-              <p>Contas vencidas e com vencimento hoje</p>
-            </div>
-          </div>
-          <strong>{summary.notifications.length}</strong>
-        </header>
+      <div className="dashboard-notifications" ref={notificationsRef}>
+        <button
+          aria-expanded={notificationsOpen}
+          aria-label={`${summary.notifications.length} notificações financeiras`}
+          className="dashboard-notification-trigger"
+          onClick={() => setNotificationsOpen((current) => !current)}
+          type="button"
+        >
+          <Bell size={20} />
+          <span>{summary.notifications.length}</span>
+        </button>
 
-        {summary.notifications.length ? (
-          <div className="dashboard-notification-list">
-            {summary.notifications.slice(0, 5).map((notification) => (
-              <button
-                className={`dashboard-notification-item ${notification.overdue ? "overdue" : ""}`}
-                key={String(notification.record.id)}
-                onClick={() => onOpenRecord("saidas", notification.record)}
-                type="button"
-              >
-                <span className="dashboard-notification-icon">
-                  {notification.overdue ? <AlertTriangle size={18} /> : <CalendarClock size={18} />}
-                </span>
-                <span>
-                  <strong>{notification.title}</strong>
-                  <small>
-                    {notification.overdue ? "Vencida" : "Vence hoje"} · {notification.date}
-                  </small>
-                </span>
-                <strong>{notification.value}</strong>
-                <ChevronRight size={18} />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="dashboard-notification-empty">Nenhuma conta vencida ou com vencimento hoje.</p>
-        )}
-      </section>
+        {notificationsOpen ? (
+          <section className="dashboard-notification-popover" aria-label="Notificações financeiras">
+            <header>
+              <div>
+                <h2>Pendências</h2>
+                <p>Vencidas e com vencimento hoje</p>
+              </div>
+              <strong>{summary.notifications.length}</strong>
+            </header>
+
+            {summary.notifications.length ? (
+              <div className="dashboard-notification-list">
+                {summary.notifications.slice(0, 5).map((notification) => (
+                  <button
+                    className={`dashboard-notification-item ${notification.overdue ? "overdue" : ""}`}
+                    key={String(notification.record.id)}
+                    onClick={() => onOpenRecord("saidas", notification.record)}
+                    type="button"
+                  >
+                    <span className="dashboard-notification-icon">
+                      {notification.overdue ? <AlertTriangle size={18} /> : <CalendarClock size={18} />}
+                    </span>
+                    <span>
+                      <strong>{notification.title}</strong>
+                      <small>
+                        {notification.overdue ? "Vencida" : "Vence hoje"} · {notification.date}
+                      </small>
+                    </span>
+                    <strong>{notification.value}</strong>
+                    <ChevronRight size={18} />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="dashboard-notification-empty">Nenhuma pendência para hoje.</p>
+            )}
+          </section>
+        ) : null}
+      </div>
 
       <section className="reference-top-grid">
         <div className="reference-stat-grid">
@@ -570,7 +611,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
               </div>
               {visiblePendingRows.length ? (
                 visiblePendingRows.map((item) => (
-                  <div key={`${item.name}-${item.date}-${item.value}`}>
+                  <div key={item.id}>
                     <strong>{item.name}</strong>
                     <span className={`pill ${item.tone}`}>{item.status}</span>
                     <span>{item.date}</span>

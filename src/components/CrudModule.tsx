@@ -4,9 +4,12 @@ import {
   Bike,
   BriefcaseBusiness,
   Car,
+  Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
   Combine,
   Construction,
   Edit3,
@@ -50,6 +53,7 @@ type Props = {
 };
 
 const PAGE_SIZE = 12;
+type FinancialStatusFilter = "todos" | "pendente" | "pago";
 
 function numericValue(value: unknown) {
   const number = Number(value ?? 0);
@@ -342,6 +346,7 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
   const [records, setRecords] = useState<AppRecord[]>([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [financialStatusFilter, setFinancialStatusFilter] = useState<FinancialStatusFilter>("todos");
   const [editing, setEditing] = useState<AppRecord | null>(null);
   const [viewing, setViewing] = useState<AppRecord | null>(initialViewing ?? null);
   const [pendingDelete, setPendingDelete] = useState<AppRecord | null>(null);
@@ -349,6 +354,7 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
   const [vehicleLabels, setVehicleLabels] = useState<Record<string, string>>({});
   const [tankLabels, setTankLabels] = useState<Record<string, string>>({});
   const [tankIdAliases, setTankIdAliases] = useState<Record<string, string>>({});
@@ -561,8 +567,12 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
           module.searchFields.some((field) => normalizeSearch(displayValue(field, record[field])).includes(normalized))
         )
       : scopedRecords;
+    const statusFilteredRecords =
+      module.key === "saidas" && financialStatusFilter !== "todos"
+        ? searchedRecords.filter((record) => record.status === financialStatusFilter)
+        : searchedRecords;
 
-    return [...searchedRecords].sort((left, right) => {
+    return [...statusFilteredRecords].sort((left, right) => {
       if (module.key === "saidas") {
         const leftPriority = left.status === "pendente" ? 0 : 1;
         const rightPriority = right.status === "pendente" ? 0 : 1;
@@ -578,7 +588,7 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
       const dateDifference = recordDateTime(right, module) - recordDateTime(left, module);
       return dateDifference || String(right.id ?? "").localeCompare(String(left.id ?? ""));
     });
-  }, [displayValue, module, query, records]);
+  }, [displayValue, financialStatusFilter, module, query, records]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedRecords = useMemo(
@@ -685,6 +695,29 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
     }
   }
 
+  async function compensateCheque() {
+    if (module.key !== "cheques" || !module.collection || !viewing?.id) return;
+    setActionError("");
+    setActionBusy(true);
+
+    try {
+      await updateRecord(module.collection, viewing.id, {
+        status: "compensado",
+        data_compensacao: todayInputValue()
+      });
+      setViewing(null);
+      await refresh(true);
+      notify({ message: "Cheque compensado.", tone: "success" });
+    } catch (compensationError) {
+      const message =
+        compensationError instanceof Error ? compensationError.message : "Não foi possível compensar este cheque.";
+      setActionError(message);
+      notify({ message, tone: "error" });
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   const showForm = isCreating || editing;
   const moduleTitle = module.title || "cadastro";
   const fieldLabels = useMemo(
@@ -778,10 +811,29 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
             <div className="detail-grid">
               {detailFields
                 .filter(
-                  (field) =>
-                    module.key !== "saidas" ||
-                    viewing.status === "pago" ||
-                    !["forma_pagamento", "data_pagamento"].includes(field.name)
+                  (field) => {
+                    if (
+                      field.visibleWhen &&
+                      viewing[field.visibleWhen.field] !== field.visibleWhen.value
+                    ) {
+                      return false;
+                    }
+
+                    if (
+                      field.visibleWhenAll &&
+                      !field.visibleWhenAll.every(
+                        (condition) => viewing[condition.field] === condition.value
+                      )
+                    ) {
+                      return false;
+                    }
+
+                    return (
+                      module.key !== "saidas" ||
+                      viewing.status === "pago" ||
+                      !["forma_pagamento", "data_pagamento"].includes(field.name)
+                    );
+                  }
                 )
                 .map((field) => (
                 <div className={field.type === "textarea" || field.type === "parts" || field.type === "tags" ? "span-2" : ""} key={field.name}>
@@ -794,6 +846,17 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
             {actionError ? <div className="alert">{actionError}</div> : null}
 
             <div className="detail-actions">
+              {module.key === "cheques" && viewing.status === "a_compensar" ? (
+                <button
+                  type="button"
+                  className="payment-button"
+                  disabled={actionBusy}
+                  onClick={compensateCheque}
+                >
+                  <CheckCircle2 size={17} />
+                  {actionBusy ? "Compensando..." : "Compensar cheque"}
+                </button>
+              ) : null}
               {module.key === "saidas" && viewing.status === "pendente" ? (
                 <button
                   type="button"
@@ -891,6 +954,34 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
           />
         </label>
         <div className="row-actions">
+          {module.key === "saidas" ? (
+            <div className="financial-status-filter" aria-label="Filtrar saídas por status">
+              <button
+                aria-pressed={financialStatusFilter === "pendente"}
+                className={financialStatusFilter === "pendente" ? "active" : ""}
+                onClick={() => {
+                  setFinancialStatusFilter((current) => (current === "pendente" ? "todos" : "pendente"));
+                  setPage(1);
+                }}
+                type="button"
+              >
+                <Clock3 size={16} />
+                Pendentes
+              </button>
+              <button
+                aria-pressed={financialStatusFilter === "pago"}
+                className={financialStatusFilter === "pago" ? "active" : ""}
+                onClick={() => {
+                  setFinancialStatusFilter((current) => (current === "pago" ? "todos" : "pago"));
+                  setPage(1);
+                }}
+                type="button"
+              >
+                <Check size={16} />
+                Pagos
+              </button>
+            </div>
+          ) : null}
           <button onClick={() => setIsCreating(true)}>
             <Plus size={18} />
             Novo

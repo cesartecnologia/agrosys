@@ -300,6 +300,45 @@ th {
   gap: 8px;
 }
 
+.financial-status-filter {
+  align-items: center;
+  background: #edf3ea;
+  border: 1px solid #dce7d8;
+  border-radius: 10px;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+}
+
+.financial-status-filter button {
+  background: transparent;
+  border-radius: 7px;
+  color: #5e6b5d;
+  font-size: 0.82rem;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.financial-status-filter button:hover {
+  background: rgba(255, 255, 255, 0.65);
+  color: #294432;
+}
+
+.financial-status-filter button.active {
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(29, 43, 24, 0.08);
+  color: var(--accent);
+}
+
+.financial-status-filter button svg {
+  stroke-width: 2;
+}
+
+.toolbar .row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   color: var(--accent);
   font-size: 0.78rem;
@@ -1097,61 +1136,93 @@ th {
 }
 
 .dashboard-notifications {
-  background: #fff;
-  border: 1px solid #e4ece0;
-  border-radius: 16px;
-  box-shadow: 0 8px 20px rgba(29, 43, 24, 0.04);
-  display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  justify-self: end;
+  position: relative;
+  z-index: 20;
 }
 
-.dashboard-notifications > header {
+.dashboard-notification-trigger {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe9dc;
+  border-radius: 10px;
+  color: #256342;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0;
+  position: relative;
+  width: 44px;
+}
+
+.dashboard-notification-trigger:hover,
+.dashboard-notification-trigger[aria-expanded="true"] {
+  background: #edf5e9;
+  border-color: #cdddc9;
+}
+
+.dashboard-notification-trigger span {
+  align-items: center;
+  background: #28734c;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  color: #fff;
+  display: flex;
+  font-size: 0.68rem;
+  font-weight: 750;
+  height: 20px;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 5px;
+  position: absolute;
+  right: -7px;
+  top: -7px;
+}
+
+.dashboard-notification-popover {
+  background: #fff;
+  border: 1px solid #dfe9dc;
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(24, 42, 27, 0.16);
+  display: grid;
+  gap: 14px;
+  max-height: min(520px, calc(100vh - 130px));
+  overflow: auto;
+  padding: 16px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 9px);
+  width: min(440px, calc(100vw - 48px));
+}
+
+.dashboard-notification-popover > header {
   align-items: center;
   display: flex;
   justify-content: space-between;
 }
 
-.dashboard-notifications > header > strong {
+.dashboard-notification-popover > header > strong {
   align-items: center;
   background: #edf5e9;
   border-radius: 8px;
   color: #256342;
   display: flex;
-  font-size: 0.85rem;
-  height: 30px;
+  font-size: 0.8rem;
+  height: 28px;
   justify-content: center;
-  min-width: 30px;
-  padding: 0 9px;
+  min-width: 28px;
+  padding: 0 8px;
 }
 
-.dashboard-notification-heading {
-  align-items: center;
-  display: flex;
-  gap: 11px;
-}
-
-.dashboard-notification-heading > span,
-.dashboard-notification-icon {
-  align-items: center;
-  background: #edf5e9;
-  border-radius: 8px;
-  color: #256342;
-  display: flex;
-  flex: 0 0 auto;
-  height: 38px;
-  justify-content: center;
-  width: 38px;
-}
-
-.dashboard-notification-heading h2 {
+.dashboard-notification-popover h2 {
   color: #172019;
   font-size: 1.05rem;
   font-weight: 750;
   margin: 0;
 }
 
-.dashboard-notification-heading p,
+.dashboard-notification-popover header p,
 .dashboard-notification-empty {
   color: #748076;
   font-size: 0.85rem;
@@ -1162,6 +1233,18 @@ th {
 .dashboard-notification-list {
   display: grid;
   gap: 8px;
+}
+
+.dashboard-notification-icon {
+  align-items: center;
+  background: #edf5e9;
+  border-radius: 8px;
+  color: #256342;
+  display: flex;
+  flex: 0 0 auto;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
 }
 
 .dashboard-notification-item {
@@ -2090,14 +2173,27 @@ th {
 .record-pagination label {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .record-pagination select {
-  height: 36px;
-  min-height: 36px;
-  min-width: 62px;
-  padding: 6px 28px 6px 10px;
+  flex: 0 0 48px;
+  height: 32px;
+  min-height: 32px;
+  min-width: 48px;
+  padding: 4px 20px 4px 8px;
+  width: 48px;
+}
+
+.record-pagination > div {
+  flex-wrap: nowrap;
+}
+
+.record-pagination .icon-button {
+  height: 32px;
+  min-height: 32px;
+  width: 32px;
 }
 
 .record-pagination button:disabled {
@@ -2610,7 +2706,7 @@ td {
 
 .app-shell {
   background: var(--bg);
-  grid-template-columns: 276px minmax(0, 1fr);
+  grid-template-columns: 244px minmax(0, 1fr);
 }
 
 .main-area {
@@ -2620,8 +2716,14 @@ td {
 .sidebar {
   background: #fbfcf8;
   border-right-color: #e7eee4;
-  gap: 20px;
-  padding: 24px 20px;
+  gap: 14px;
+  padding: 20px 16px;
+}
+
+.sidebar nav {
+  align-content: start;
+  gap: 3px;
+  grid-auto-rows: max-content;
 }
 
 .sidebar-brand {
@@ -2643,7 +2745,7 @@ td {
 
 .sidebar-footer {
   border-top-color: #e7eee4;
-  padding-top: 14px;
+  padding-top: 10px;
 }
 
 .sidebar-footer strong {
@@ -2661,7 +2763,7 @@ td {
   font-size: 0.72rem;
   font-weight: 620;
   letter-spacing: 0.02em;
-  margin: 6px 0 2px;
+  margin: 0;
 }
 
 .nav-heading svg,
@@ -2671,16 +2773,16 @@ td {
 }
 
 .nav-group {
-  gap: 5px;
+  gap: 2px;
 }
 
 .nav-group button {
-  border-radius: 12px;
+  border-radius: 10px;
   color: #3a4338;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 540;
-  min-height: 38px;
-  padding: 9px 12px;
+  min-height: 34px;
+  padding: 7px 10px;
 }
 
 .nav-group button:hover {
@@ -2705,12 +2807,12 @@ td {
   display: grid;
   font-size: 0.72rem;
   font-weight: 650;
-  gap: 9px;
+  gap: 8px;
   grid-template-columns: 18px minmax(0, 1fr) 16px;
   justify-items: start;
   letter-spacing: 0.025em;
-  min-height: 36px;
-  padding: 8px 8px;
+  min-height: 34px;
+  padding: 7px 8px;
   text-transform: uppercase;
   width: 100%;
 }
@@ -2739,17 +2841,17 @@ td {
 
 .nav-subitems {
   display: grid;
-  gap: 4px;
-  padding: 2px 0 8px 0;
+  gap: 2px;
+  padding: 0 0 3px;
 }
 
 .nav-subitems button {
-  border-radius: 12px;
+  border-radius: 10px;
   color: #334033;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 540;
-  min-height: 38px;
-  padding: 9px 12px 9px 38px;
+  min-height: 34px;
+  padding: 7px 10px 7px 34px;
 }
 
 .nav-subitems button svg {

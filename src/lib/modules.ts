@@ -297,7 +297,13 @@ export const modules: ModuleConfig[] = [
       { name: "data_emissao", label: "Data de emissão", type: "date", required: true },
       { name: "data_vencimento", label: "Data de vencimento", type: "date", required: true },
       { name: "emitente_beneficiario", label: "Emitente/Beneficiário", type: "text", required: true },
-      { name: "status", label: "Status", type: "select", required: true, options: ["a_compensar", "compensado", "devolvido"] }
+      { name: "status", label: "Status", type: "select", required: true, options: ["a_compensar", "compensado", "devolvido"] },
+      {
+        name: "data_compensacao",
+        label: "Data da compensação",
+        type: "date",
+        visibleWhen: { field: "status", value: "compensado" }
+      }
     ]
   },
   {
