@@ -4,6 +4,9 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Banknote,
+  Bell,
+  CalendarClock,
+  ChevronRight,
   Droplets,
   Fuel,
   Sprout,
@@ -19,6 +22,7 @@ import type { AppRecord, ModuleConfig, ModuleKey } from "@/types/domain";
 type Props = {
   allowedModules: ModuleConfig[];
   onNavigate: (key: ModuleKey) => void;
+  onOpenRecord: (key: ModuleKey, record: AppRecord) => void;
 };
 
 type DashboardData = Record<string, AppRecord[]>;
@@ -30,6 +34,14 @@ type PendingRow = {
   sortDate: number;
   status: string;
   tone: "green" | "yellow";
+  value: string;
+};
+type DashboardNotification = {
+  date: string;
+  overdue: boolean;
+  record: AppRecord;
+  sortDate: number;
+  title: string;
   value: string;
 };
 type StatCard = {
@@ -85,6 +97,17 @@ function isOverdue(value: unknown) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return date < today;
+}
+
+function isToday(value: unknown) {
+  const date = asDate(value);
+  if (!date) return false;
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
 }
 
 function isWithinPastDays(value: unknown, days: number) {
@@ -185,7 +208,7 @@ function ProgressRow({ item, max, suffix = "" }: { item: GroupSummary; max: numb
   );
 }
 
-export function Dashboard({ allowedModules, onNavigate }: Props) {
+export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
   const [data, setData] = useState<DashboardData>({});
   const [loading, setLoading] = useState(true);
   const [pendingView, setPendingView] = useState<PendingView>("recentes");
@@ -226,9 +249,18 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
     const tanques = data.tanques_combustivel ?? [];
     const veiculos = data.veiculos ?? [];
 
-    const gastosPagosMes = financeiro
-      .filter((item) => item.tipo === "saida" && item.status === "pago" && isCurrentMonth(item.data_lancamento))
+    const gastosFinanceirosPagosMes = financeiro
+      .filter(
+        (item) =>
+          item.tipo === "saida" &&
+          item.status === "pago" &&
+          isCurrentMonth(item.data_pagamento || item.data_lancamento)
+      )
       .reduce((total, item) => total + asNumber(item.valor), 0);
+    const chequesCompensadosMes = cheques
+      .filter((item) => item.status === "compensado" && isCurrentMonth(item.data_vencimento))
+      .reduce((total, item) => total + asNumber(item.valor), 0);
+    const gastosPagosMes = gastosFinanceirosPagosMes + chequesCompensadosMes;
     const pendente = financeiro
       .filter((item) => item.status === "pendente")
       .reduce((total, item) => total + asNumber(item.valor), 0);
@@ -239,7 +271,24 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
       .reduce((total, item) => total + asNumber(item.litros), 0);
     const saldoTanques = tanques.reduce((total, item) => total + asNumber(item.saldo_atual_litros), 0);
     const capacidadeTanques = tanques.reduce((total, item) => total + asNumber(item.capacidade_litros), 0);
+    const manutencoesMes = manutencoes.filter((item) => isWithinPastDays(item.data_manutencao, 30)).length;
     const manutencoesProximas = manutencoes.filter((item) => isWithinDays(item.proxima_manutencao, 30));
+    const notifications: DashboardNotification[] = financeiro
+      .filter(
+        (item) =>
+          item.tipo === "saida" &&
+          item.status === "pendente" &&
+          (isOverdue(item.data_vencimento_recebimento) || isToday(item.data_vencimento_recebimento))
+      )
+      .map((item) => ({
+        date: formatDateValue(item.data_vencimento_recebimento) || "-",
+        overdue: isOverdue(item.data_vencimento_recebimento),
+        record: item,
+        sortDate: dateTimeValue(item.data_vencimento_recebimento),
+        title: String(item.descricao || "Conta pendente"),
+        value: toCurrency(asNumber(item.valor))
+      }))
+      .sort((left, right) => left.sortDate - right.sortDate);
     const pendingRows: PendingRow[] = [
       ...financeiro
         .filter((item) => item.status === "pendente")
@@ -274,6 +323,7 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
     return {
       adubacoesMes: adubacoes.filter((item) => isWithinPastDays(item.data_aplicacao, 30)).length,
       chequesACompensar: cheques.filter((item) => item.status === "a_compensar").length,
+      chequesCompensadosMes,
       consumoPorVeiculo: groupByNumber(
         combustivel.filter((item) => isWithinPastDays(item.data_abastecimento, 30)),
         "veiculo_id",
@@ -283,7 +333,10 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
       consumoSemanal,
       gastosPagosMes,
       litrosCafe,
+      manutencoesMes,
       manutencoesProximas,
+      manutencoesTotal: manutencoes.length,
+      notifications,
       pendente,
       pendingRows,
       producaoPorFazenda: groupByNumber(colheitas, "fazenda", "quantidade_sacas", "Fazenda"),
@@ -316,10 +369,10 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
       value: `${summary.sacas.toLocaleString("pt-BR")} sc`
     },
     {
-      detail: "Pagos no mês atual",
+      detail: `Inclui ${toCurrency(summary.chequesCompensadosMes)} em cheques`,
       icon: <Banknote size={18} />,
       label: "Gastos pagos",
-      target: "movimentacoes_financeiras",
+      target: "saidas",
       tone: "mint",
       value: toCurrency(summary.gastosPagosMes)
     },
@@ -332,7 +385,7 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
       value: `${summary.saldoTanques.toLocaleString("pt-BR")} L`
     },
     {
-      detail: `${summary.manutencoesProximas.length} manutenções`,
+      detail: `${summary.manutencoesTotal} manutenções cadastradas`,
       icon: <Tractor size={18} />,
       label: "Frota",
       target: "veiculos",
@@ -345,7 +398,7 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
     { icon: <Droplets size={22} />, label: "Tanque", tone: "purple", value: `${tankPercent.toFixed(0)}%` },
     { icon: <Sprout size={22} />, label: "Adubação", tone: "yellow", value: String(summary.adubacoesMes) },
     { icon: <AlertTriangle size={22} />, label: "Vencidas", tone: "blue", value: String(summary.vencidas) },
-    { icon: <Wrench size={22} />, label: "Oficina", tone: "green", value: String(summary.manutencoesProximas.length) },
+    { icon: <Wrench size={22} />, label: "Manutenção", tone: "green", value: String(summary.manutencoesMes) },
     { icon: <Fuel size={22} />, label: "Consumo", tone: "violet", value: `${summary.consumoSemanal.toLocaleString("pt-BR")} L` }
   ];
 
@@ -353,6 +406,48 @@ export function Dashboard({ allowedModules, onNavigate }: Props) {
 
   return (
     <section className="dashboard dashboard-reference">
+      <section className="dashboard-notifications" aria-label="Notificações financeiras">
+        <header>
+          <div className="dashboard-notification-heading">
+            <span>
+              <Bell size={19} />
+            </span>
+            <div>
+              <h2>Notificações</h2>
+              <p>Contas vencidas e com vencimento hoje</p>
+            </div>
+          </div>
+          <strong>{summary.notifications.length}</strong>
+        </header>
+
+        {summary.notifications.length ? (
+          <div className="dashboard-notification-list">
+            {summary.notifications.slice(0, 5).map((notification) => (
+              <button
+                className={`dashboard-notification-item ${notification.overdue ? "overdue" : ""}`}
+                key={String(notification.record.id)}
+                onClick={() => onOpenRecord("saidas", notification.record)}
+                type="button"
+              >
+                <span className="dashboard-notification-icon">
+                  {notification.overdue ? <AlertTriangle size={18} /> : <CalendarClock size={18} />}
+                </span>
+                <span>
+                  <strong>{notification.title}</strong>
+                  <small>
+                    {notification.overdue ? "Vencida" : "Vence hoje"} · {notification.date}
+                  </small>
+                </span>
+                <strong>{notification.value}</strong>
+                <ChevronRight size={18} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="dashboard-notification-empty">Nenhuma conta vencida ou com vencimento hoje.</p>
+        )}
+      </section>
+
       <section className="reference-top-grid">
         <div className="reference-stat-grid">
           {statCards.map((card) => (

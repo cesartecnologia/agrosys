@@ -4,6 +4,8 @@ export function formatChoiceLabel(value: unknown) {
   const raw = String(value ?? "").trim();
   const labels: Record<string, string> = {
     combustivel: "Combustível",
+    cartao_credito: "Cartão de crédito",
+    cartao_debito: "Cartão de débito",
     despesas_indiretas: "Despesas indiretas",
     despesas_publicas: "Despesas públicas",
     escritorio: "Escritório",
@@ -12,6 +14,7 @@ export function formatChoiceLabel(value: unknown) {
     materiais_construcao: "Materiais de construção",
     outros: "Outros",
     salarios: "Salários",
+    transferencia: "Transferência",
     vendas_cafe: "Vendas de café"
   };
   const normalized = labels[raw] ?? raw.replace(/_/g, " ").trim();

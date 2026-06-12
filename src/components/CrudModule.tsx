@@ -4,6 +4,9 @@ import {
   Bike,
   BriefcaseBusiness,
   Car,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
   Combine,
   Construction,
   Edit3,
@@ -32,7 +35,7 @@ import {
   updateRecordWithTankDeltas,
   type TankBalanceDelta
 } from "@/lib/firestore-service";
-import { formatChoiceLabel, formatPhoneValue, formatValue, normalizeSearch } from "@/lib/format";
+import { formatChoiceLabel, formatPhoneValue, formatValue, normalizeSearch, parseDateValue } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import type { AppRecord, ModuleConfig, ModuleKey } from "@/types/domain";
 import { RecordForm } from "@/components/RecordForm";
@@ -40,14 +43,25 @@ import { useAuth } from "@/components/AuthProvider";
 
 type Props = {
   activeKey?: ModuleKey;
+  initialViewing?: AppRecord | null;
   module: ModuleConfig;
   onNavigate?: (key: ModuleKey) => void;
   relatedModules?: ModuleConfig[];
 };
 
+const PAGE_SIZE = 12;
+
 function numericValue(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function todayInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function tankIdFrom(record: AppRecord | null | undefined) {
@@ -101,6 +115,27 @@ function vehicleIconFor(type: unknown): LucideIcon {
   if (normalized.includes("carro") || normalized.includes("veiculo")) return Car;
   if (normalized.includes("pulverizador")) return SprayCan;
   return Construction;
+}
+
+function recordDateTime(record: AppRecord, module: ModuleConfig) {
+  const preferredFields: Partial<Record<ModuleKey, string[]>> = {
+    adubacoes: ["data_aplicacao"],
+    cheques: ["data_emissao", "data_vencimento"],
+    colheitas: ["data_colheita"],
+    combustivel: ["data_abastecimento"],
+    entradas: ["data_lancamento", "data_vencimento_recebimento"],
+    manutencoes: ["data_manutencao"],
+    reabastecimentos_tanque: ["data_reabastecimento"],
+    saidas: ["data_pagamento", "data_lancamento", "data_vencimento_recebimento"]
+  };
+  const fields = [...(preferredFields[module.key] ?? []), "updatedAt", "createdAt"];
+
+  for (const field of fields) {
+    const date = parseDateValue(record[field]);
+    if (date) return date.getTime();
+  }
+
+  return 0;
 }
 
 function displayableFields(module: ModuleConfig) {
@@ -183,10 +218,11 @@ function recordKicker(record: AppRecord, module: ModuleConfig, displayValue: (fi
     combustivel: String(record.origem_abastecimento ?? "tanque") === "posto" ? "posto_id" : "tanque_id",
     fornecedores: "cnpj",
     funcionarios: "cargo",
+    entradas: "categoria",
     manutencoes: "tipo",
-    movimentacoes_financeiras: "categoria",
     produtos: "unidade_medida",
     reabastecimentos_tanque: "tanque_id",
+    saidas: "categoria",
     tanques_combustivel: "tipo_combustivel",
     users: "email",
     veiculos: "tipo"
@@ -204,10 +240,11 @@ function recordKickerField(module: ModuleConfig) {
     combustivel: "origem_abastecimento",
     fornecedores: "cnpj",
     funcionarios: "cargo",
+    entradas: "categoria",
     manutencoes: "tipo",
-    movimentacoes_financeiras: "categoria",
     produtos: "unidade_medida",
     reabastecimentos_tanque: "tanque_id",
+    saidas: "categoria",
     tanques_combustivel: "tipo_combustivel",
     users: "email",
     veiculos: "tipo"
@@ -300,12 +337,13 @@ function assertTankDeltas(
   }
 }
 
-export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] }: Props) {
+export function CrudModule({ activeKey, initialViewing, module, onNavigate, relatedModules = [] }: Props) {
   const { createUser } = useAuth();
   const [records, setRecords] = useState<AppRecord[]>([]);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<AppRecord | null>(null);
-  const [viewing, setViewing] = useState<AppRecord | null>(null);
+  const [viewing, setViewing] = useState<AppRecord | null>(initialViewing ?? null);
   const [pendingDelete, setPendingDelete] = useState<AppRecord | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -344,7 +382,7 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
     setLoading(true);
     setError("");
     try {
-      setRecords(await listRecords(module.collection, 100, { force }));
+      setRecords(await listRecords(module.collection, 500, { force }));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar os dados.");
     } finally {
@@ -513,11 +551,40 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
 
   const filtered = useMemo(() => {
     const normalized = normalizeSearch(query);
-    if (!normalized) return records;
-    return records.filter((record) =>
-      module.searchFields.some((field) => normalizeSearch(displayValue(field, record[field])).includes(normalized))
-    );
-  }, [displayValue, module.searchFields, query, records]);
+    const scopedRecords = module.fixedValues
+      ? records.filter((record) =>
+          Object.entries(module.fixedValues ?? {}).every(([field, value]) => String(record[field] ?? "") === value)
+        )
+      : records;
+    const searchedRecords = normalized
+      ? scopedRecords.filter((record) =>
+          module.searchFields.some((field) => normalizeSearch(displayValue(field, record[field])).includes(normalized))
+        )
+      : scopedRecords;
+
+    return [...searchedRecords].sort((left, right) => {
+      if (module.key === "saidas") {
+        const leftPriority = left.status === "pendente" ? 0 : 1;
+        const rightPriority = right.status === "pendente" ? 0 : 1;
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+
+        if (leftPriority === 0) {
+          const leftDueDate = parseDateValue(left.data_vencimento_recebimento)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+          const rightDueDate = parseDateValue(right.data_vencimento_recebimento)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+          if (leftDueDate !== rightDueDate) return leftDueDate - rightDueDate;
+        }
+      }
+
+      const dateDifference = recordDateTime(right, module) - recordDateTime(left, module);
+      return dateDifference || String(right.id ?? "").localeCompare(String(left.id ?? ""));
+    });
+  }, [displayValue, module, query, records]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRecords = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [currentPage, filtered]
+  );
 
   async function handleSubmit(payload: AppRecord, forcedId?: string) {
     if (!module.collection) return;
@@ -534,6 +601,11 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       throw new Error("Informe uma senha temporária para criar o usuário.");
     } else {
       delete payload.password;
+      Object.assign(payload, module.fixedValues ?? {});
+      if (module.key === "saidas" && payload.status !== "pago") {
+        payload.forma_pagamento = null;
+        payload.data_pagamento = null;
+      }
       if ((module.key === "postos_combustiveis" || module.key === "tanques_combustivel") && !payload.status) {
         payload.status = "ativo";
       }
@@ -704,17 +776,41 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
             </header>
 
             <div className="detail-grid">
-              {detailFields.map((field) => (
+              {detailFields
+                .filter(
+                  (field) =>
+                    module.key !== "saidas" ||
+                    viewing.status === "pago" ||
+                    !["forma_pagamento", "data_pagamento"].includes(field.name)
+                )
+                .map((field) => (
                 <div className={field.type === "textarea" || field.type === "parts" || field.type === "tags" ? "span-2" : ""} key={field.name}>
                   <span>{field.label}</span>
                   <strong>{displayValue(field.name, viewing[field.name])}</strong>
                 </div>
-              ))}
+                ))}
             </div>
 
             {actionError ? <div className="alert">{actionError}</div> : null}
 
             <div className="detail-actions">
+              {module.key === "saidas" && viewing.status === "pendente" ? (
+                <button
+                  type="button"
+                  className="payment-button"
+                  onClick={() => {
+                    setEditing({
+                      ...viewing,
+                      status: "pago",
+                      data_pagamento: viewing.data_pagamento || todayInputValue()
+                    });
+                    setViewing(null);
+                  }}
+                >
+                  <CircleDollarSign size={17} />
+                  Realizar pagamento
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ghost-button"
@@ -785,7 +881,14 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       <div className="toolbar">
         <label className="search-box">
           <Search size={18} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar" />
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Pesquisar"
+          />
         </label>
         <div className="row-actions">
           <button onClick={() => setIsCreating(true)}>
@@ -804,7 +907,7 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
         <div className="empty-state">Carregando...</div>
       ) : filtered.length ? (
         <div className="record-card-grid">
-          {filtered.map((record) => {
+          {paginatedRecords.map((record) => {
             const VehicleIcon = module.key === "veiculos" ? vehicleIconFor(record.tipo) : null;
             const status = recordStatus(record, displayValue);
             const isInactive = normalizedText(record.status) === "inativo";
@@ -914,6 +1017,46 @@ export function CrudModule({ activeKey, module, onNavigate, relatedModules = [] 
       ) : (
         <div className="empty-state">Nenhum registro encontrado.</div>
       )}
+      {!loading && filtered.length > PAGE_SIZE ? (
+        <nav className="record-pagination" aria-label="Paginação dos registros">
+          <span>
+            {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filtered.length)} de {filtered.length}
+          </span>
+          <div>
+            <button
+              type="button"
+              className="icon-button"
+              disabled={currentPage === 1}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              title="Página anterior"
+              aria-label="Página anterior"
+            >
+              <ChevronLeft size={17} />
+            </button>
+            <label>
+              Página
+              <select value={currentPage} onChange={(event) => setPage(Number(event.target.value))}>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                  <option value={pageNumber} key={pageNumber}>
+                    {pageNumber}
+                  </option>
+                ))}
+              </select>
+              de {totalPages}
+            </label>
+            <button
+              type="button"
+              className="icon-button"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              title="Próxima página"
+              aria-label="Próxima página"
+            >
+              <ChevronRight size={17} />
+            </button>
+          </div>
+        </nav>
+      ) : null}
     </section>
   );
 }

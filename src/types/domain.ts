@@ -1,5 +1,10 @@
 export type Role = "admin" | "operador" | "financeiro";
 
+export type FieldCondition = {
+  field: string;
+  value: string;
+};
+
 export type FieldType =
   | "text"
   | "email"
@@ -19,11 +24,13 @@ export type FormField = {
   label: string;
   type: FieldType;
   required?: boolean;
-  requiredWhen?: { field: string; value: string };
+  requiredWhen?: FieldCondition;
+  requiredWhenAll?: FieldCondition[];
   options?: string[];
   placeholder?: string;
   defaultValue?: string;
-  visibleWhen?: { field: string; value: string };
+  visibleWhen?: FieldCondition;
+  visibleWhenAll?: FieldCondition[];
 };
 
 export type ModuleKey =
@@ -38,7 +45,8 @@ export type ModuleKey =
   | "combustivel"
   | "colheitas"
   | "adubacoes"
-  | "movimentacoes_financeiras"
+  | "entradas"
+  | "saidas"
   | "cheques"
   | "fornecedores"
   | "produtos"
@@ -60,6 +68,7 @@ export type ModuleConfig = {
   searchFields: string[];
   listFields: string[];
   fields: FormField[];
+  fixedValues?: Record<string, string>;
 };
 
 export type UserProfile = {

@@ -26,7 +26,7 @@ import { listRecords } from "@/lib/firestore-service";
 import { canAccess, getDefaultModuleForRole } from "@/lib/rbac";
 import { moduleGroups, modules } from "@/lib/modules";
 import type { NotifyPayload, NotifyTone } from "@/lib/notify";
-import type { ModuleKey } from "@/types/domain";
+import type { AppRecord, ModuleKey } from "@/types/domain";
 
 type Toast = Required<NotifyPayload> & {
   id: number;
@@ -58,6 +58,7 @@ export function AppShell() {
   const [activeKey, setActiveKey] = useState<ModuleKey | "nfe" | "dashboard" | "reports">("dashboard");
   const [expandedGroup, setExpandedGroup] = useState<(typeof moduleGroups)[number] | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [selectedRecord, setSelectedRecord] = useState<AppRecord | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const allowedModules = useMemo(() => {
@@ -120,6 +121,7 @@ export function AppShell() {
   const activeModule = allowedModules.find((module) => module.key === activeKey);
 
   function activateDashboard() {
+    setSelectedRecord(null);
     setActiveKey("dashboard");
     setExpandedGroup(null);
   }
@@ -129,6 +131,7 @@ export function AppShell() {
   }
 
   function activateModule(key: ModuleKey | "nfe" | "reports") {
+    setSelectedRecord(null);
     setActiveKey(key);
 
     if (key === "nfe") {
@@ -143,6 +146,15 @@ export function AppShell() {
 
     const nextModule = allowedModules.find((module) => module.key === key);
     if (nextModule) setExpandedGroup(nextModule.group);
+  }
+
+  function openModuleRecord(key: ModuleKey, record: AppRecord) {
+    const nextModule = allowedModules.find((module) => module.key === key);
+    if (!nextModule) return;
+
+    setSelectedRecord(record);
+    setActiveKey(key);
+    setExpandedGroup(nextModule.group);
   }
 
   return (
@@ -234,20 +246,25 @@ export function AppShell() {
 
       <main className="main-area">
         {activeKey === "dashboard" ? (
-          <Dashboard allowedModules={allowedModules} onNavigate={activateModule} />
+          <Dashboard
+            allowedModules={allowedModules}
+            onNavigate={activateModule}
+            onOpenRecord={openModuleRecord}
+          />
         ) : activeKey === "reports" ? (
           <Reports allowedModules={allowedModules} />
         ) : activeKey === "nfe" ? (
           <NfeImporter />
         ) : currentModule ? (
           <CrudModule
-            key={currentModule.key}
+            key={`${currentModule.key}-${selectedRecord?.id ?? "list"}`}
             module={currentModule}
             activeKey={currentModule.key}
+            initialViewing={selectedRecord}
             relatedModules={
               fuelModuleKeys.has(currentModule.key) ? allowedModules.filter((module) => fuelModuleKeys.has(module.key)) : []
             }
-            onNavigate={setActiveKey}
+            onNavigate={activateModule}
           />
         ) : null}
       </main>

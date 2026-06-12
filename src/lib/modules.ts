@@ -225,22 +225,58 @@ export const modules: ModuleConfig[] = [
     ]
   },
   {
-    key: "movimentacoes_financeiras",
+    key: "entradas",
     collection: "movimentacoes_financeiras",
-    title: "Entrada e saída",
-    description: "Entradas, saídas, fluxo de caixa e lançamentos gerais.",
+    title: "Entradas",
+    description: "Receitas e valores recebidos.",
     group: "Financeiro",
     allowedRoles: ["admin", "financeiro"],
-    searchFields: ["descricao", "categoria", "status", "tipo"],
-    listFields: ["descricao", "valor", "tipo", "data_vencimento_recebimento", "status"],
+    fixedValues: { tipo: "entrada" },
+    searchFields: ["descricao", "categoria", "status"],
+    listFields: ["descricao", "valor", "data_lancamento", "data_vencimento_recebimento", "status"],
     fields: [
       { name: "descricao", label: "Descrição", type: "text", required: true },
       { name: "valor", label: "Valor", type: "number", required: true },
-      { name: "tipo", label: "Tipo", type: "select", required: true, options: ["entrada", "saida"] },
       { name: "data_lancamento", label: "Data de lançamento", type: "date", required: true },
       { name: "data_vencimento_recebimento", label: "Vencimento/Recebimento", type: "date" },
       { name: "categoria", label: "Categoria", type: "select", options: ["insumos", "salarios", "vendas_cafe", "manutencao", "combustivel", "materiais_construcao", "despesas_publicas", "despesas_indiretas", "escritorio", "outros"] },
-      { name: "status", label: "Status", type: "select", required: true, options: ["pendente", "pago", "recebido"] },
+      { name: "status", label: "Situação", type: "select", required: true, defaultValue: "pendente", options: ["pendente", "recebido"] },
+      { name: "referencia_nfe_id", label: "Referência NFe", type: "text" },
+      { name: "referencia_cheque_id", label: "Referência cheque", type: "text" }
+    ]
+  },
+  {
+    key: "saidas",
+    collection: "movimentacoes_financeiras",
+    title: "Saídas",
+    description: "Contas a pagar e despesas da fazenda.",
+    group: "Financeiro",
+    allowedRoles: ["admin", "financeiro"],
+    fixedValues: { tipo: "saida" },
+    searchFields: ["descricao", "categoria", "status", "forma_pagamento"],
+    listFields: ["descricao", "valor", "data_vencimento_recebimento", "status", "forma_pagamento", "data_pagamento"],
+    fields: [
+      { name: "descricao", label: "Descrição", type: "text", required: true },
+      { name: "valor", label: "Valor", type: "number", required: true },
+      { name: "data_lancamento", label: "Data de lançamento", type: "date", required: true },
+      { name: "data_vencimento_recebimento", label: "Data de vencimento", type: "date" },
+      { name: "categoria", label: "Categoria", type: "select", options: ["insumos", "salarios", "vendas_cafe", "manutencao", "combustivel", "materiais_construcao", "despesas_publicas", "despesas_indiretas", "escritorio", "outros"] },
+      { name: "status", label: "Situação", type: "select", required: true, defaultValue: "pendente", options: ["pendente", "pago"] },
+      {
+        name: "forma_pagamento",
+        label: "Forma de pagamento",
+        type: "select",
+        options: ["dinheiro", "pix", "transferencia", "cartao_credito", "cartao_debito", "boleto", "cheque", "outro"],
+        visibleWhen: { field: "status", value: "pago" },
+        requiredWhen: { field: "status", value: "pago" }
+      },
+      {
+        name: "data_pagamento",
+        label: "Data do pagamento",
+        type: "date",
+        visibleWhen: { field: "status", value: "pago" },
+        requiredWhen: { field: "status", value: "pago" }
+      },
       { name: "referencia_nfe_id", label: "Referência NFe", type: "text" },
       { name: "referencia_cheque_id", label: "Referência cheque", type: "text" }
     ]

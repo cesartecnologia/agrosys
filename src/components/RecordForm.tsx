@@ -185,12 +185,15 @@ function parseStation(value: string, field: FormField, stations: AppRecord[]) {
 }
 
 function fieldIsVisible(field: FormField, values: Record<string, string>) {
-  if (!field.visibleWhen) return true;
-  return values[field.visibleWhen.field] === field.visibleWhen.value;
+  if (field.visibleWhen && values[field.visibleWhen.field] !== field.visibleWhen.value) return false;
+  return field.visibleWhenAll?.every((condition) => values[condition.field] === condition.value) ?? true;
 }
 
 function fieldIsRequired(field: FormField, values: Record<string, string>) {
-  return Boolean(field.required || (field.requiredWhen && values[field.requiredWhen.field] === field.requiredWhen.value));
+  const requiredBySingleCondition = field.requiredWhen && values[field.requiredWhen.field] === field.requiredWhen.value;
+  const requiredByAllConditions =
+    field.requiredWhenAll?.every((condition) => values[condition.field] === condition.value) ?? false;
+  return Boolean(field.required || requiredBySingleCondition || requiredByAllConditions);
 }
 
 export function RecordForm({ module, initial, onSubmit, onCancel }: Props) {
@@ -329,7 +332,15 @@ export function RecordForm({ module, initial, onSubmit, onCancel }: Props) {
   );
 
   function setValue(name: string, value: string) {
-    setValues((current) => ({ ...current, [name]: value }));
+    setValues((current) => {
+      const next = { ...current, [name]: value };
+
+      return next;
+    });
+  }
+
+  function selectOptions(field: FormField) {
+    return field.options ?? [];
   }
 
   function tankInputValue(name: string) {
@@ -445,7 +456,7 @@ export function RecordForm({ module, initial, onSubmit, onCancel }: Props) {
                 required={fieldIsRequired(field, values)}
               >
                 <option value="">Selecione</option>
-                {field.options?.map((option) => (
+                {selectOptions(field).map((option) => (
                   <option value={option} key={option}>
                     {formatChoiceLabel(option)}
                   </option>

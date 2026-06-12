@@ -244,18 +244,27 @@ function getTableFields(module: ModuleConfig) {
 function buildMetrics(moduleKey: string, records: AppRecord[]): Metric[] {
   const total = records.length.toLocaleString("pt-BR");
 
-  if (moduleKey === "movimentacoes_financeiras") {
-    const entradas = records.filter((record) => record.tipo === "entrada");
-    const saidas = records.filter((record) => record.tipo === "saida");
-    const totalEntradas = sum(entradas, "valor");
-    const totalSaidas = sum(saidas, "valor");
+  if (moduleKey === "entradas") {
+    const recebidas = records.filter((record) => record.status === "recebido");
     const pendentes = records.filter((record) => record.status === "pendente");
 
     return [
-      { label: "Registros", value: total, detail: "lançamentos no filtro" },
-      { label: "Entradas", value: toCurrency(totalEntradas), detail: `${entradas.length} receitas` },
-      { label: "Saídas", value: toCurrency(totalSaidas), detail: `${saidas.length} despesas` },
-      { label: "Saldo", value: toCurrency(totalEntradas - totalSaidas), detail: `${pendentes.length} pendentes` }
+      { label: "Entradas", value: total, detail: "lançamentos no filtro" },
+      { label: "Valor", value: toCurrency(sum(records, "valor")), detail: "total das entradas" },
+      { label: "Recebidas", value: toCurrency(sum(recebidas, "valor")), detail: `${recebidas.length} recebimentos` },
+      { label: "Pendentes", value: toCurrency(sum(pendentes, "valor")), detail: `${pendentes.length} pendências` }
+    ];
+  }
+
+  if (moduleKey === "saidas") {
+    const pagas = records.filter((record) => record.status === "pago");
+    const pendentes = records.filter((record) => record.status === "pendente");
+
+    return [
+      { label: "Saídas", value: total, detail: "contas no filtro" },
+      { label: "Valor", value: toCurrency(sum(records, "valor")), detail: "total das despesas" },
+      { label: "Pagas", value: toCurrency(sum(pagas, "valor")), detail: `${pagas.length} pagamentos` },
+      { label: "Pendentes", value: toCurrency(sum(pendentes, "valor")), detail: `${pendentes.length} contas` }
     ];
   }
 
@@ -537,8 +546,18 @@ export function Reports({ allowedModules }: Props) {
   }, [selectedModule]);
 
   const categoryOptions = useMemo(
-    () => (categoryField ? getCategoryOptions(records, categoryField) : []),
-    [categoryField, records]
+    () => {
+      if (!categoryField) return [];
+      const scopedRecords = selectedModule?.fixedValues
+        ? records.filter((record) =>
+            Object.entries(selectedModule.fixedValues ?? {}).every(
+              ([field, value]) => String(record[field] ?? "") === value
+            )
+          )
+        : records;
+      return getCategoryOptions(scopedRecords, categoryField);
+    },
+    [categoryField, records, selectedModule]
   );
 
   const filteredRecords = useMemo(() => {
@@ -546,6 +565,12 @@ export function Reports({ allowedModules }: Props) {
     const normalized = normalizeSearch(search);
 
     return records.filter((record) => {
+      if (
+        selectedModule.fixedValues &&
+        !Object.entries(selectedModule.fixedValues).every(([field, value]) => String(record[field] ?? "") === value)
+      ) {
+        return false;
+      }
       if (dateField && !isWithinRange(record[dateField], startDate, endDate)) return false;
       if (categoryField && categoryValue && String(record[categoryField] ?? "") !== categoryValue) return false;
       if (!normalized) return true;

@@ -15,7 +15,7 @@ export function roleLabel(role: Role | undefined) {
 }
 
 export function getDefaultModuleForRole(role: Role): ModuleKey {
-  if (role === "financeiro") return "movimentacoes_financeiras";
+  if (role === "financeiro") return "entradas";
   if (role === "operador") return "colheitas";
   return "empresa";
 }
