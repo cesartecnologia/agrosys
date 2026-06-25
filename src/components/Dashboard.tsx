@@ -288,7 +288,10 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
           isCurrentMonth(item.data_compensacao || item.data_vencimento)
       )
       .reduce((total, item) => total + asNumber(item.valor), 0);
-    const gastosPagosMes = gastosFinanceirosPagosMes + chequesCompensadosMes;
+    const gastosManutencoesMes = manutencoes
+      .filter((item) => isCurrentMonth(item.data_manutencao))
+      .reduce((total, item) => total + asNumber(item.custo_total), 0);
+    const gastosPagosMes = gastosFinanceirosPagosMes + chequesCompensadosMes + gastosManutencoesMes;
     const pendente = financeiro
       .filter((item) => item.status === "pendente")
       .reduce((total, item) => total + asNumber(item.valor), 0);
@@ -362,6 +365,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
         "Veículo"
       ),
       consumoSemanal,
+      gastosManutencoesMes,
       gastosPagosMes,
       litrosCafe,
       manutencoesMes,
@@ -400,7 +404,7 @@ export function Dashboard({ allowedModules, onNavigate, onOpenRecord }: Props) {
       value: `${summary.sacas.toLocaleString("pt-BR")} sc`
     },
     {
-      detail: `Inclui ${toCurrency(summary.chequesCompensadosMes)} em cheques`,
+      detail: `${toCurrency(summary.gastosManutencoesMes)} em manutenção`,
       icon: <Banknote size={18} />,
       label: "Gastos pagos",
       target: "saidas",
