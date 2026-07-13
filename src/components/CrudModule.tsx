@@ -54,10 +54,28 @@ type Props = {
 
 const PAGE_SIZE = 12;
 type FinancialStatusFilter = "todos" | "pendente" | "pago";
+const VALID_FUEL_TYPES = new Set(["diesel", "diesel_s10", "gasolina", "etanol", "biodiesel", "outro"]);
 
 function numericValue(value: unknown) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeFuelType(value: unknown) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s-]+/g, "_");
+
+  if (VALID_FUEL_TYPES.has(normalized)) return normalized;
+  if (normalized.includes("s10")) return "diesel_s10";
+  if (normalized.includes("biodiesel")) return "biodiesel";
+  if (normalized.includes("diesel")) return "diesel";
+  if (normalized.includes("gasolina")) return "gasolina";
+  if (normalized.includes("etanol") || normalized.includes("alcool")) return "etanol";
+  return "outro";
 }
 
 function todayInputValue() {
@@ -451,19 +469,19 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
           const display = tankDisplay(tank);
           const id = String(tank.id ?? "").trim();
           const name = String(tank.nome ?? "").trim();
-          const fuelType = String(tank.tipo_combustivel ?? "").trim();
+          const fuelType = normalizeFuelType(tank.tipo_combustivel);
           const capacidade = numericValue(tank.capacidade_litros);
           const saldo = numericValue(tank.saldo_atual_litros);
           if (id) {
             labels[id] = display;
             idAliases[id] = id;
             balances[id] = { capacidade, saldo };
-            if (fuelType) fuelTypes[id] = fuelType;
+            fuelTypes[id] = fuelType;
           }
           if (name) {
             labels[name] = display;
             if (id) idAliases[name] = id;
-            if (fuelType) fuelTypes[name] = fuelType;
+            fuelTypes[name] = fuelType;
           }
           if (display && id) idAliases[display] = id;
         }
@@ -644,7 +662,7 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
         };
       })();
       const tankFuelType = !isFuelStationFill
-        ? String(tankFuelTypes[tankIdFrom(fuelStationPayload)] ?? fuelStationPayload.tipo_combustivel ?? "outro").trim()
+        ? normalizeFuelType(tankFuelTypes[tankIdFrom(fuelStationPayload)] ?? fuelStationPayload.tipo_combustivel)
         : "";
       const nextPayload =
         (module.key === "combustivel" || module.key === "reabastecimentos_tanque") && tankFuelType
