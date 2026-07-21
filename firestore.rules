@@ -37,7 +37,26 @@ service cloud.firestore {
     }
 
     function validFuelType(value) {
-      return value in ["diesel", "diesel_s10", "gasolina", "etanol", "biodiesel", "outro"];
+      return value in [
+        "diesel",
+        "diesel_s10",
+        "diesel s10",
+        "diesel-s10",
+        "DIESEL",
+        "DIESEL S10",
+        "Diesel",
+        "Diesel S10",
+        "gasolina",
+        "Gasolina",
+        "etanol",
+        "alcool",
+        "álcool",
+        "Etanol",
+        "biodiesel",
+        "Biodiesel",
+        "outro",
+        "Outro"
+      ];
     }
 
     function changedKeys() {
@@ -247,8 +266,16 @@ service cloud.firestore {
       && validFuelType(request.resource.data.tipo_combustivel)
       && validNonNegativeNumber(request.resource.data.litros)
       && request.resource.data.litros > 0
-      && validNonNegativeNumber(request.resource.data.valor_litro)
-      && validNonNegativeNumber(request.resource.data.valor_total)
+      && (
+        !request.resource.data.keys().hasAny(["valor_litro"])
+        || request.resource.data.valor_litro == null
+        || validNonNegativeNumber(request.resource.data.valor_litro)
+      )
+      && (
+        !request.resource.data.keys().hasAny(["valor_total"])
+        || request.resource.data.valor_total == null
+        || validNonNegativeNumber(request.resource.data.valor_total)
+      )
       && validOptionalText(request.resource.data.fornecedor, 180)
       && validOptionalText(request.resource.data.documento, 180)
       && validOptionalText(request.resource.data.responsavel, 180)

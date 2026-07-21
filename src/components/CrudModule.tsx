@@ -38,6 +38,7 @@ import {
   updateRecordWithTankDeltas,
   type TankBalanceDelta
 } from "@/lib/firestore-service";
+import { deleteField } from "firebase/firestore";
 import { formatChoiceLabel, formatPhoneValue, formatValue, normalizeSearch, parseDateValue } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import type { AppRecord, ModuleConfig, ModuleKey } from "@/types/domain";
@@ -61,6 +62,10 @@ function numericValue(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function compactPayload(record: AppRecord) {
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as AppRecord;
+}
+
 function normalizeFuelType(value: unknown) {
   const normalized = String(value ?? "")
     .trim()
@@ -76,6 +81,19 @@ function normalizeFuelType(value: unknown) {
   if (normalized.includes("gasolina")) return "gasolina";
   if (normalized.includes("etanol") || normalized.includes("alcool")) return "etanol";
   return "outro";
+}
+
+function normalizeTankRefuelPayload(payload: AppRecord, tankFuelTypes: Record<string, string>) {
+  const liters = numericValue(payload.litros);
+  const literValue = numericValue(payload.valor_litro);
+  const totalValue = numericValue(payload.valor_total);
+  const computedTotal = liters > 0 && literValue > 0 ? Number((liters * literValue).toFixed(2)) : totalValue;
+
+  return compactPayload({
+    ...payload,
+    tipo_combustivel: normalizeFuelType(tankFuelTypes[tankIdFrom(payload)] ?? payload.tipo_combustivel),
+    valor_total: computedTotal
+  });
 }
 
 function todayInputValue() {
@@ -641,33 +659,37 @@ export function CrudModule({ activeKey, initialViewing, module, onNavigate, rela
       const isFuelStationFill = module.key === "combustivel" && fuelOrigin === "posto";
       const liters = numericValue(payload.litros);
       const literValue = numericValue(payload.valor_litro);
+      const clearField = editing?.id ? deleteField() : undefined;
       const fuelStationPayload = (() => {
         if (module.key !== "combustivel") return payload;
 
         if (isFuelStationFill) {
-          return {
+          return compactPayload({
             ...payload,
             origem_abastecimento: "posto",
-            tanque_id: null,
+            tanque_id: clearField,
+            tipo_combustivel: normalizeFuelType(payload.tipo_combustivel),
             valor_total: liters > 0 && literValue > 0 ? Number((liters * literValue).toFixed(2)) : payload.valor_total
-          };
+          });
         }
 
-        return {
+        return compactPayload({
           ...payload,
           origem_abastecimento: "tanque",
-          posto_id: null,
-          valor_litro: null,
-          valor_total: null
-        };
+          posto_id: clearField,
+          valor_litro: clearField,
+          valor_total: clearField
+        });
       })();
+      const fuelPayload =
+        module.key === "reabastecimentos_tanque" ? normalizeTankRefuelPayload(fuelStationPayload, tankFuelTypes) : fuelStationPayload;
       const tankFuelType = !isFuelStationFill
-        ? normalizeFuelType(tankFuelTypes[tankIdFrom(fuelStationPayload)] ?? fuelStationPayload.tipo_combustivel)
+        ? normalizeFuelType(tankFuelTypes[tankIdFrom(fuelPayload)] ?? fuelPayload.tipo_combustivel)
         : "";
       const nextPayload =
         (module.key === "combustivel" || module.key === "reabastecimentos_tanque") && tankFuelType
-          ? { ...fuelStationPayload, tipo_combustivel: tankFuelType }
-          : fuelStationPayload;
+          ? { ...fuelPayload, tipo_combustivel: tankFuelType }
+          : fuelPayload;
 
       if (editing?.id) {
         const tankDeltas = normalizeTankDeltas(getTankBalanceDeltas(module.key, nextPayload, editing), tankIdAliases);
